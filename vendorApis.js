@@ -107,15 +107,14 @@ class DellAPI {
 
         try {
             const apiKey = this.getApiKey();
-            const params = new URLSearchParams({
-                servicetags: serviceTag
-            });
-            const url = `${this.baseUrl}/asset-entitlements?${params.toString()}`;
 
-            console.log('Dell API Request:', url);
+            // Use backend proxy to avoid CORS issues
+            const proxyUrl = `/api/dell/warranty/${serviceTag}`;
+
+            console.log('Dell API Request via proxy:', proxyUrl);
             console.log('API Key length:', apiKey.length);
 
-            const response = await fetch(url, {
+            const response = await fetch(proxyUrl, {
                 method: 'GET',
                 headers: {
                     'X-Dell-Api-Key': apiKey,
