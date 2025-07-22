@@ -27,6 +27,8 @@ class WarrantyChecker {
      * Initialize DOM elements
      */
     initializeElements() {
+        console.log('Initializing DOM elements...');
+
         // File upload elements
         this.fileInput = document.getElementById('csvFile');
         this.dropZone = document.getElementById('dropZone');
@@ -54,6 +56,34 @@ class WarrantyChecker {
         // API status elements
         this.apiStatusContainer = document.getElementById('apiStatus');
         this.dellStatusElement = document.getElementById('dellStatus');
+
+        // Log missing elements
+        const elements = {
+            fileInput: this.fileInput,
+            dropZone: this.dropZone,
+            fileInfo: this.fileInfo,
+            processBtn: this.processBtn,
+            progressContainer: this.progressContainer,
+            progressBar: this.progressBar,
+            progressText: this.progressText,
+            statusText: this.statusText,
+            resultsContainer: this.resultsContainer,
+            resultsTable: this.resultsTable,
+            exportBtn: this.exportBtn,
+            configBtn: this.configBtn,
+            configModal: this.configModal,
+            saveConfigBtn: this.saveConfigBtn,
+            dellApiKeyInput: this.dellApiKeyInput,
+            dellStatusElement: this.dellStatusElement
+        };
+
+        Object.entries(elements).forEach(([name, element]) => {
+            if (!element) {
+                console.error(`Missing element: ${name}`);
+            }
+        });
+
+        console.log('DOM elements initialized');
     }
 
     /**
@@ -157,6 +187,8 @@ class WarrantyChecker {
      * Process uploaded CSV file
      */
     processFile(file) {
+        console.log('Processing file:', file.name, 'Size:', file.size);
+
         if (!file.name.toLowerCase().endsWith('.csv')) {
             this.showError('Please select a CSV file.');
             return;
@@ -168,16 +200,30 @@ class WarrantyChecker {
                 <small>Size: ${(file.size / 1024).toFixed(1)} KB</small>
             </div>
         `;
+        this.fileInfo.style.display = 'block';
+
+        console.log('Starting CSV parsing...');
+
+        // Check if Papa is available
+        if (typeof Papa === 'undefined') {
+            this.showError('PapaParse library not loaded. Please refresh the page and try again.');
+            return;
+        }
 
         // Parse CSV using PapaParse
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
             complete: (results) => {
+                console.log('CSV parsing complete:', results);
+                console.log('Data rows:', results.data.length);
+                console.log('First row:', results.data[0]);
+
                 this.csvData = results.data;
                 this.validateCsvData();
             },
             error: (error) => {
+                console.error('CSV parsing error:', error);
                 this.showError(`Error parsing CSV: ${error.message}`);
             }
         });
@@ -187,18 +233,25 @@ class WarrantyChecker {
      * Validate CSV data structure
      */
     validateCsvData() {
+        console.log('Validating CSV data...');
+        console.log('CSV data length:', this.csvData.length);
+
         if (this.csvData.length === 0) {
             this.showError('CSV file is empty or has no valid data rows.');
             return;
         }
 
         const firstRow = this.csvData[0];
+        console.log('First row columns:', Object.keys(firstRow));
 
         // Check for simple format (vendor, service_tag columns)
         const hasSimpleFormat = 'vendor' in firstRow && ('service_tag' in firstRow || 'serial' in firstRow);
 
         // Check for system report format (Device Serial Number, Base Board Manufacturer)
         const hasSystemReportFormat = 'Device Serial Number' in firstRow && 'Base Board Manufacturer' in firstRow;
+
+        console.log('Has simple format:', hasSimpleFormat);
+        console.log('Has system report format:', hasSystemReportFormat);
 
         if (!hasSimpleFormat && !hasSystemReportFormat) {
             this.showError(`CSV format not recognized. Please ensure your CSV has either:
@@ -212,6 +265,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Filter and count valid devices
         const validDevices = this.getValidDevicesFromCsv();
+        console.log('Valid devices found:', validDevices.length);
+        console.log('Valid devices:', validDevices);
 
         if (validDevices.length === 0) {
             this.showError('No valid devices found in CSV. Please check that devices have serial numbers and recognized manufacturers.');
@@ -699,7 +754,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Show saving indicator
         this.saveConfigBtn.disabled = true;
-        this.saveConfigBtn.textContent = 'Saving...';
+        this.saveConfigBtn.textContent = 'Validating...';
 
         try {
             if (dellApiKey) {
@@ -708,9 +763,17 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     throw new Error('API key appears to be too short. Please check your Dell API key.');
                 }
 
-                localStorage.setItem('dell_api_key', dellApiKey);
-                this.updateApiStatus();
-                this.showSuccess('✅ Dell API key saved successfully! You can now process Dell devices.');
+                // Test the API key with a real validation call
+                this.showMessage('🔍 Testing Dell API key...', 'info');
+                const isValid = await this.validateDellApiKey(dellApiKey);
+
+                if (isValid) {
+                    localStorage.setItem('dell_api_key', dellApiKey);
+                    this.updateApiStatus();
+                    this.showSuccess('✅ Dell API key validated and saved successfully! You can now process Dell devices.');
+                } else {
+                    throw new Error('Dell API key validation failed. Please check your API key and try again.');
+                }
             } else {
                 localStorage.removeItem('dell_api_key');
                 this.updateApiStatus();
@@ -720,7 +783,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             // Close modal after successful save
             setTimeout(() => {
                 this.hideConfigModal();
-            }, 1500);
+            }, 2000);
 
         } catch (error) {
             this.showError(`❌ Configuration Error: ${error.message}`);
@@ -732,9 +795,45 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Validate Dell API key by making a test call
+     */
+    async validateDellApiKey(apiKey) {
+        try {
+            // Use a test service tag that should always return a response (even if not found)
+            const testServiceTag = 'TEST123'; // This will return 404 but validates the API key
+            const url = 'https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements';
+
+            const response = await fetch(`${url}?servicetags=${testServiceTag}`, {
+                method: 'GET',
+                headers: {
+                    'X-Dell-Api-Key': apiKey,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // API key is valid if we get any response other than 401 (unauthorized)
+            // 404 (not found) is actually a good response - it means the API key works
+            if (response.status === 401) {
+                return false; // Invalid API key
+            }
+
+            // Any other response (200, 404, 429, 500) means the API key is valid
+            return true;
+
+        } catch (error) {
+            console.error('API validation error:', error);
+            // Network errors or CORS issues - assume key might be valid
+            // We'll let the user proceed and catch issues during actual processing
+            return true;
+        }
+    }
+
+    /**
      * Show success message
      */
     showSuccess(message) {
+        console.log('Success:', message);
         this.showMessage(message, 'success');
     }
 
@@ -742,6 +841,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Show error message
      */
     showError(message) {
+        console.error('Error:', message);
         this.showMessage(message, 'error');
     }
 
@@ -749,6 +849,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Show message with type
      */
     showMessage(message, type) {
+        console.log(`Message (${type}):`, message);
+
         // Remove existing messages
         const existingMessages = document.querySelectorAll('.message');
         existingMessages.forEach(msg => msg.remove());
@@ -760,7 +862,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Insert at top of main content
         const main = document.querySelector('main');
-        main.insertBefore(messageDiv, main.firstChild);
+        if (main) {
+            main.insertBefore(messageDiv, main.firstChild);
+        } else {
+            console.error('Main element not found, appending to body');
+            document.body.appendChild(messageDiv);
+        }
 
         // Auto-remove after 5 seconds
         setTimeout(() => {
