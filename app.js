@@ -105,7 +105,13 @@ class WarrantyChecker {
 
         // Configuration events
         this.configBtn.addEventListener('click', () => this.showConfigModal());
-        this.closeModal.addEventListener('click', () => this.hideConfigModal());
+
+        // Handle multiple close modal elements
+        const closeModalElements = document.querySelectorAll('.close-modal');
+        closeModalElements.forEach(element => {
+            element.addEventListener('click', () => this.hideConfigModal());
+        });
+
         this.saveConfigBtn.addEventListener('click', () => this.saveConfiguration());
 
         // Modal close on outside click
@@ -736,21 +742,42 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Show configuration modal
      */
     showConfigModal() {
-        this.configModal.style.display = 'block';
+        console.log('Showing configuration modal');
+        if (this.configModal) {
+            this.configModal.style.display = 'block';
+            console.log('Modal displayed');
+        } else {
+            console.error('Config modal element not found');
+        }
     }
 
     /**
      * Hide configuration modal
      */
     hideConfigModal() {
-        this.configModal.style.display = 'none';
+        console.log('Hiding configuration modal');
+        if (this.configModal) {
+            this.configModal.style.display = 'none';
+            console.log('Modal hidden');
+        } else {
+            console.error('Config modal element not found');
+        }
     }
 
     /**
      * Save configuration with validation and feedback
      */
     async saveConfiguration() {
+        console.log('Save configuration called');
+
+        if (!this.dellApiKeyInput) {
+            console.error('Dell API key input not found');
+            this.showError('Configuration error: Dell API key input not found');
+            return;
+        }
+
         const dellApiKey = this.dellApiKeyInput.value.trim();
+        console.log('Dell API key length:', dellApiKey.length);
 
         // Show saving indicator
         this.saveConfigBtn.disabled = true;
