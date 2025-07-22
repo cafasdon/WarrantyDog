@@ -19,9 +19,14 @@ class WarrantyChecker {
         this.processingCancelled = false;
         this.currentIndex = 0;
 
+        // Session management for resume functionality
+        this.sessionId = null;
+        this.sessionKey = 'warrantydog_session';
+
         this.initializeElements();
         this.bindEvents();
         this.loadApiKeys();
+        this.checkForExistingSession();
     }
 
     /**
@@ -52,6 +57,7 @@ class WarrantyChecker {
         this.resultsContainer = document.getElementById('resultsContainer');
         this.resultsTable = document.getElementById('resultsTable');
         this.exportBtn = document.getElementById('exportBtn');
+        this.clearSessionBtn = document.getElementById('clearSessionBtn');
 
         // Configuration elements
         this.configBtn = document.getElementById('configBtn');
@@ -114,6 +120,11 @@ class WarrantyChecker {
         // Processing events
         this.processBtn.addEventListener('click', () => this.startProcessing());
         this.cancelBtn.addEventListener('click', () => this.cancelProcessing());
+
+        // Session management events
+        if (this.clearSessionBtn) {
+            this.clearSessionBtn.addEventListener('click', () => this.clearSessionWithConfirmation());
+        }
 
         // Export events
         this.exportBtn.addEventListener('click', () => this.exportResults());
@@ -612,8 +623,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     cancelProcessing() {
         console.log('Processing cancelled by user');
         this.processingCancelled = true;
-        this.showMessage('⏹️ Processing cancelled by user', 'info');
+        this.showMessage('⏹️ Processing cancelled by user. Session saved for resume.', 'info');
         this.resetProcessingUI();
+        // Session is automatically saved after each device, so no additional save needed
     }
 
     /**
@@ -651,7 +663,29 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         // Track processing start time for ETA calculation
         this.processingStartTime = Date.now();
 
-        for (const device of allDevices) {
+        // Initialize resume data if not resuming
+        if (!this.resumeData) {
+            this.resumeData = {
+                startIndex: 0,
+                successful: 0,
+                failed: 0,
+                skipped: 0
+            };
+        }
+
+        // Start from resume point if resuming
+        processed = this.resumeData.startIndex;
+        successful = this.resumeData.successful;
+        failed = this.resumeData.failed;
+        skipped = this.resumeData.skipped;
+
+        for (let i = 0; i < allDevices.length; i++) {
+            const device = allDevices[i];
+
+            // Skip already processed devices if resuming
+            if (i < this.resumeData.startIndex) {
+                continue;
+            }
             // Check if processing was cancelled
             if (this.processingCancelled) {
                 console.log('Processing loop cancelled');
@@ -742,6 +776,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             processed++;
 
+            // Save session state after each device (checkpoint)
+            this.saveSession(allDevices, processed, successful, failed, skipped);
+
             // Respectful delay to prevent overwhelming the API (2 seconds between requests)
             // Only delay for actual API calls, not for skipped devices
             if (!this.processingCancelled && processed < total && (device.isSupported && device.apiConfigured)) {
@@ -751,6 +788,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         this.updateProgress(processed, total, successful, failed, skipped);
         this.finalizeProcessing(successful, failed, skipped);
+
+        // Clear session when processing completes successfully
+        if (!this.processingCancelled) {
+            this.clearSession();
+        }
     }
 
     /**
@@ -1400,6 +1442,151 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         // No auto-remove for persistent messages
+    }
+
+    /**
+     * Session Management Methods for Resume Functionality
+     */
+
+    /**
+     * Check for existing session on page load
+     */
+    checkForExistingSession() {
+        const savedSession = localStorage.getItem(this.sessionKey);
+        if (savedSession) {
+            try {
+                const session = JSON.parse(savedSession);
+                if (this.isValidSession(session)) {
+                    this.showResumeOption(session);
+                } else {
+                    // Clean up invalid session
+                    localStorage.removeItem(this.sessionKey);
+                }
+            } catch (error) {
+                console.error('Error parsing saved session:', error);
+                localStorage.removeItem(this.sessionKey);
+            }
+        }
+    }
+
+    /**
+     * Validate if a session is still valid and resumable
+     */
+    isValidSession(session) {
+        return session &&
+               session.sessionId &&
+               session.devices &&
+               Array.isArray(session.devices) &&
+               session.devices.length > 0 &&
+               session.processedCount !== undefined &&
+               session.processedCount < session.devices.length &&
+               (Date.now() - session.lastSaved) < (24 * 60 * 60 * 1000); // Valid for 24 hours
+    }
+
+    /**
+     * Save current session state
+     */
+    saveSession(devices, processedCount, successful, failed, skipped) {
+        if (!this.sessionId) {
+            this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+        }
+
+        const sessionData = {
+            sessionId: this.sessionId,
+            devices: devices,
+            processedCount: processedCount,
+            successful: successful,
+            failed: failed,
+            skipped: skipped,
+            lastSaved: Date.now(),
+            csvFileName: this.fileInfo ? this.fileInfo.textContent : 'Unknown'
+        };
+
+        try {
+            localStorage.setItem(this.sessionKey, JSON.stringify(sessionData));
+            console.log(`Session saved: ${processedCount}/${devices.length} devices processed`);
+        } catch (error) {
+            console.error('Error saving session:', error);
+        }
+    }
+
+    /**
+     * Clear current session
+     */
+    clearSession() {
+        localStorage.removeItem(this.sessionKey);
+        this.sessionId = null;
+        this.resumeData = null;
+        if (this.clearSessionBtn) {
+            this.clearSessionBtn.style.display = 'none';
+        }
+        console.log('Session cleared');
+    }
+
+    /**
+     * Clear session with user confirmation
+     */
+    clearSessionWithConfirmation() {
+        if (confirm('Are you sure you want to clear the saved session? This will permanently delete your progress and cannot be undone.')) {
+            this.clearSession();
+            this.showMessage('🗑️ Session cleared successfully', 'info');
+        }
+    }
+
+    /**
+     * Show resume option to user
+     */
+    showResumeOption(session) {
+        const resumeMessage = `📋 Previous session found!\n\n` +
+            `File: ${session.csvFileName}\n` +
+            `Progress: ${session.processedCount}/${session.devices.length} devices processed\n` +
+            `✅ ${session.successful} successful, ❌ ${session.failed} failed, ⏭️ ${session.skipped} skipped\n\n` +
+            `Would you like to resume where you left off?`;
+
+        if (confirm(resumeMessage)) {
+            this.resumeSession(session);
+        } else {
+            this.clearSession();
+        }
+    }
+
+    /**
+     * Resume processing from saved session
+     */
+    resumeSession(session) {
+        console.log('Resuming session:', session.sessionId);
+
+        // Restore session data
+        this.sessionId = session.sessionId;
+        this.csvData = session.devices;
+
+        // Display the devices in the table
+        this.displayDetectedDevices(session.devices);
+
+        // Show resume status
+        this.showPersistentMessage(
+            `🔄 Session Resumed!\n` +
+            `Continuing from device ${session.processedCount + 1}/${session.devices.length}\n` +
+            `Previous progress: ✅ ${session.successful} successful, ❌ ${session.failed} failed, ⏭️ ${session.skipped} skipped`,
+            'info'
+        );
+
+        // Enable processing with resume data
+        this.processBtn.disabled = false;
+        this.processBtn.textContent = `Resume Processing (${session.devices.length - session.processedCount} remaining)`;
+
+        // Show clear session button
+        if (this.clearSessionBtn) {
+            this.clearSessionBtn.style.display = 'inline-block';
+        }
+
+        // Store resume data for processing
+        this.resumeData = {
+            startIndex: session.processedCount,
+            successful: session.successful,
+            failed: session.failed,
+            skipped: session.skipped
+        };
     }
 }
 
