@@ -50,6 +50,10 @@ class WarrantyChecker {
         this.closeModal = document.querySelector('.close-modal');
         this.saveConfigBtn = document.getElementById('saveConfig');
         this.dellApiKeyInput = document.getElementById('dellApiKey');
+
+        // API status elements
+        this.apiStatusContainer = document.getElementById('apiStatus');
+        this.dellStatusElement = document.getElementById('dellStatus');
     }
 
     /**
@@ -59,6 +63,7 @@ class WarrantyChecker {
         // File upload events
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+        this.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.dropZone.addEventListener('drop', (e) => this.handleFileDrop(e));
         this.dropZone.addEventListener('click', () => this.fileInput.click());
 
@@ -82,12 +87,30 @@ class WarrantyChecker {
     }
 
     /**
-     * Load API keys from localStorage
+     * Load API keys from localStorage and update status
      */
     loadApiKeys() {
         const dellApiKey = localStorage.getItem('dell_api_key');
         if (dellApiKey && this.dellApiKeyInput) {
             this.dellApiKeyInput.value = dellApiKey;
+        }
+        this.updateApiStatus();
+    }
+
+    /**
+     * Update API status indicators
+     */
+    updateApiStatus() {
+        const dellApiKey = localStorage.getItem('dell_api_key');
+
+        if (this.dellStatusElement) {
+            if (dellApiKey && dellApiKey.trim().length > 0) {
+                this.dellStatusElement.textContent = '✅ Configured';
+                this.dellStatusElement.className = 'status configured';
+            } else {
+                this.dellStatusElement.textContent = '❌ Not configured';
+                this.dellStatusElement.className = 'status not-configured';
+            }
         }
     }
 
@@ -107,6 +130,14 @@ class WarrantyChecker {
     handleDragOver(event) {
         event.preventDefault();
         this.dropZone.classList.add('drag-over');
+    }
+
+    /**
+     * Handle drag leave event
+     */
+    handleDragLeave(event) {
+        event.preventDefault();
+        this.dropZone.classList.remove('drag-over');
     }
 
     /**
@@ -188,31 +219,47 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         this.showSuccess(`✅ CSV loaded successfully! Found ${validDevices.length} valid devices out of ${this.csvData.length} total rows.`);
+
+        // Stage 1: Immediately display all detected devices
+        this.displayDetectedDevices(validDevices);
         this.processBtn.disabled = false;
     }
 
     /**
-     * Get valid devices from CSV data, handling both simple and system report formats
+     * Get all valid devices from CSV data, including unsupported vendors
      */
     getValidDevicesFromCsv() {
         return this.csvData.filter(row => {
-            // Skip virtual machines and invalid entries
+            // Skip virtual machines and entries without serial numbers
             if (this.isVirtualMachine(row)) return false;
 
             const serialNumber = this.extractSerialNumber(row);
             const vendor = this.extractVendor(row);
 
-            return serialNumber && vendor && this.isSupportedVendor(vendor);
+            // Include all devices with serial numbers and identifiable vendors
+            return serialNumber && vendor;
         }).map(row => {
+            const vendor = this.extractVendor(row);
             return {
                 originalData: row,
-                vendor: this.extractVendor(row),
+                vendor: vendor,
                 serialNumber: this.extractSerialNumber(row),
                 model: this.extractModel(row),
                 deviceName: this.extractDeviceName(row),
-                location: this.extractLocation(row)
+                location: this.extractLocation(row),
+                isSupported: this.isSupportedVendor(vendor),
+                apiConfigured: this.isApiConfigured(vendor)
             };
         });
+    }
+
+    /**
+     * Get only devices that can be processed (supported vendors with configured APIs)
+     */
+    getProcessableDevices() {
+        return this.getValidDevicesFromCsv().filter(device =>
+            device.isSupported && device.apiConfigured
+        );
     }
 
     /**
@@ -278,6 +325,116 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Check if API is configured for vendor
+     */
+    isApiConfigured(vendor) {
+        switch (vendor.toLowerCase()) {
+            case 'dell':
+                return localStorage.getItem('dell_api_key') !== null;
+            case 'lenovo':
+                return false; // Not implemented yet
+            case 'hp':
+                return false; // Not implemented yet
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Display detected devices immediately after CSV upload (Stage 1)
+     */
+    displayDetectedDevices(devices) {
+        this.resultsContainer.style.display = 'block';
+
+        // Update table headers
+        const thead = this.resultsTable.querySelector('thead tr');
+        thead.innerHTML = `
+            <th>Device Name</th>
+            <th>Location</th>
+            <th>Vendor</th>
+            <th>Serial Number</th>
+            <th>Model</th>
+            <th>API Status</th>
+            <th>Warranty Status</th>
+            <th>Warranty Type</th>
+            <th>End Date</th>
+            <th>Days Remaining</th>
+        `;
+
+        // Clear existing table
+        const tbody = this.resultsTable.querySelector('tbody');
+        tbody.innerHTML = '';
+
+        // Add devices to table with initial status
+        devices.forEach(device => {
+            const row = tbody.insertRow();
+            const apiStatus = this.getApiStatusText(device);
+
+            row.innerHTML = `
+                <td>${device.deviceName || 'Unknown'}</td>
+                <td>${device.location || 'Unknown'}</td>
+                <td>${device.vendor || 'Unknown'}</td>
+                <td>${device.serialNumber || 'Unknown'}</td>
+                <td>${device.model || 'Unknown'}</td>
+                <td><span class="status-${apiStatus.class}">${apiStatus.text}</span></td>
+                <td class="warranty-status">⏳ Pending</td>
+                <td class="warranty-type">-</td>
+                <td class="warranty-end">-</td>
+                <td class="warranty-days">-</td>
+            `;
+
+            // Store device data for later processing
+            row.dataset.deviceIndex = devices.indexOf(device);
+        });
+
+        // Show processing controls
+        this.updateProcessingControls(devices);
+    }
+
+    /**
+     * Get API status text and class for a device
+     */
+    getApiStatusText(device) {
+        if (!device.isSupported) {
+            return { text: '❌ Not Supported', class: 'not-supported' };
+        }
+        if (!device.apiConfigured) {
+            return { text: '⚙️ API Not Configured', class: 'not-configured' };
+        }
+        return { text: '✅ Ready', class: 'ready' };
+    }
+
+    /**
+     * Update processing controls based on detected devices
+     */
+    updateProcessingControls(devices) {
+        const processableCount = devices.filter(d => d.isSupported && d.apiConfigured).length;
+        const unsupportedCount = devices.filter(d => !d.isSupported).length;
+        const unconfiguredCount = devices.filter(d => d.isSupported && !d.apiConfigured).length;
+
+        // Update process button text
+        if (processableCount === 0) {
+            this.processBtn.textContent = 'No Devices Ready for Processing';
+            this.processBtn.disabled = true;
+        } else {
+            this.processBtn.textContent = `Process ${processableCount} Device${processableCount !== 1 ? 's' : ''}`;
+            this.processBtn.disabled = false;
+        }
+
+        // Show status summary
+        let statusMessage = `📊 Device Summary: ${devices.length} total devices detected\n`;
+        statusMessage += `✅ Ready for processing: ${processableCount}\n`;
+        if (unconfiguredCount > 0) {
+            statusMessage += `⚙️ Need API configuration: ${unconfiguredCount}\n`;
+        }
+        if (unsupportedCount > 0) {
+            statusMessage += `❌ Unsupported vendors: ${unsupportedCount}`;
+        }
+
+        this.showMessage(statusMessage, 'info');
+    }
+
+    /**
      * Start warranty processing
      */
     async startProcessing() {
@@ -304,20 +461,34 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Process all devices in the CSV
+     * Process devices that can be processed (Stage 2)
      */
     async processDevices() {
-        const validDevices = this.getValidDevicesFromCsv();
-        const total = validDevices.length;
+        const processableDevices = this.getProcessableDevices();
+        const total = processableDevices.length;
         let processed = 0;
         let successful = 0;
         let failed = 0;
 
-        this.showMessage(`Processing ${total} valid devices...`, 'info');
+        if (total === 0) {
+            this.showError('No devices are ready for processing. Please configure API keys for supported vendors.');
+            return;
+        }
 
-        for (const device of validDevices) {
+        this.showMessage(`Processing ${total} device${total !== 1 ? 's' : ''} with configured APIs...`, 'info');
+
+        for (const device of processableDevices) {
             this.currentIndex = processed;
             this.updateProgress(processed, total, successful, failed);
+
+            // Find the table row for this device
+            const deviceIndex = this.getValidDevicesFromCsv().indexOf(device);
+            const row = this.resultsTable.querySelector(`tbody tr[data-device-index="${deviceIndex}"]`);
+
+            if (row) {
+                // Update status to processing
+                row.querySelector('.warranty-status').innerHTML = '🔄 Processing...';
+            }
 
             try {
                 const result = await this.warrantyService.lookupWarranty(device.vendor, device.serialNumber);
@@ -330,6 +501,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
                 this.processedResults.push(result);
                 successful++;
+
+                // Update the table row with warranty information
+                if (row) {
+                    this.updateRowWithWarrantyData(row, result);
+                }
 
             } catch (error) {
                 const errorResult = {
@@ -344,6 +520,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 };
                 this.processedResults.push(errorResult);
                 failed++;
+
+                // Update the table row with error information
+                if (row) {
+                    this.updateRowWithWarrantyData(row, errorResult);
+                }
             }
 
             processed++;
@@ -353,7 +534,37 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         this.updateProgress(processed, total, successful, failed);
-        this.showResults();
+        this.finalizeProcessing(successful, failed);
+    }
+
+    /**
+     * Update a table row with warranty data
+     */
+    updateRowWithWarrantyData(row, result) {
+        const statusCell = row.querySelector('.warranty-status');
+        const typeCell = row.querySelector('.warranty-type');
+        const endCell = row.querySelector('.warranty-end');
+        const daysCell = row.querySelector('.warranty-days');
+
+        statusCell.innerHTML = `<span class="status-${result.status}">${this.formatStatus(result.status)}</span>`;
+        typeCell.textContent = result.warrantyType || (result.status === 'error' ? 'Error' : 'N/A');
+        endCell.textContent = result.endDate || 'N/A';
+        daysCell.textContent = result.daysRemaining || 'N/A';
+    }
+
+    /**
+     * Finalize processing and show summary
+     */
+    finalizeProcessing(successful, failed) {
+        this.exportBtn.disabled = false;
+
+        let message = `✅ Processing complete!\n`;
+        message += `✅ Successful: ${successful}\n`;
+        if (failed > 0) {
+            message += `❌ Failed: ${failed}`;
+        }
+
+        this.showSuccess(message);
     }
 
     /**
@@ -481,20 +692,43 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Save configuration
+     * Save configuration with validation and feedback
      */
-    saveConfiguration() {
+    async saveConfiguration() {
         const dellApiKey = this.dellApiKeyInput.value.trim();
 
-        if (dellApiKey) {
-            localStorage.setItem('dell_api_key', dellApiKey);
-            this.showSuccess('✅ Dell API key saved successfully!');
-        } else {
-            localStorage.removeItem('dell_api_key');
-            this.showSuccess('✅ Dell API key removed.');
-        }
+        // Show saving indicator
+        this.saveConfigBtn.disabled = true;
+        this.saveConfigBtn.textContent = 'Saving...';
 
-        this.hideConfigModal();
+        try {
+            if (dellApiKey) {
+                // Basic validation - check if key looks valid
+                if (dellApiKey.length < 10) {
+                    throw new Error('API key appears to be too short. Please check your Dell API key.');
+                }
+
+                localStorage.setItem('dell_api_key', dellApiKey);
+                this.updateApiStatus();
+                this.showSuccess('✅ Dell API key saved successfully! You can now process Dell devices.');
+            } else {
+                localStorage.removeItem('dell_api_key');
+                this.updateApiStatus();
+                this.showSuccess('✅ Dell API key removed.');
+            }
+
+            // Close modal after successful save
+            setTimeout(() => {
+                this.hideConfigModal();
+            }, 1500);
+
+        } catch (error) {
+            this.showError(`❌ Configuration Error: ${error.message}`);
+        } finally {
+            // Reset button
+            this.saveConfigBtn.disabled = false;
+            this.saveConfigBtn.textContent = 'Save';
+        }
     }
 
     /**

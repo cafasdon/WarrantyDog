@@ -16,41 +16,46 @@
         
         <div class="upload-section">
             <input type="file" id="csvFile" accept=".csv" />
-            <label for="csvFile" class="file-label">
-                📁 Choose CSV File
-            </label>
-            <div class="file-info" id="fileInfo"></div>
+            <div id="dropZone" class="drop-zone">
+                <label for="csvFile" class="file-label">
+                    📁 Choose CSV File or Drop Here
+                </label>
+                <div class="file-info" id="fileInfo"></div>
+            </div>
         </div>
         
         <div class="api-status" id="apiStatus">
             <div class="status-item">
-                <span class="vendor">Dell:</span>
-                <span class="status" id="dellStatus">Not configured</span>
+                <span class="vendor-name">Dell:</span>
+                <span id="dellStatus" class="status not-configured">❌ Not configured</span>
             </div>
             <div class="status-item">
-                <span class="vendor">Lenovo:</span>
-                <span class="status">Coming soon</span>
+                <span class="vendor-name">Lenovo:</span>
+                <span class="status not-implemented">🚧 Coming Soon</span>
             </div>
             <div class="status-item">
-                <span class="vendor">HP:</span>
-                <span class="status">Coming soon</span>
+                <span class="vendor-name">HP:</span>
+                <span class="status not-implemented">🚧 Coming Soon</span>
             </div>
         </div>
         
         <div class="status-section">
             <div id="status">Ready to process CSV</div>
-            <div class="progress-container">
-                <div id="progress" class="progress-bar"></div>
+            <div id="progressContainer" class="progress-container">
+                <div id="progressBar" class="progress-bar"></div>
+                <div id="progressText">0%</div>
+                <div id="statusText"></div>
             </div>
         </div>
         
         <div class="controls">
+            <button id="processBtn" class="btn btn-primary" disabled>Process Warranties</button>
             <button id="clearBtn" disabled>🗑️ Clear</button>
             <button id="exportBtn" disabled>📥 Export Results</button>
             <button id="configBtn">⚙️ Configure APIs</button>
         </div>
         
-        <div class="results-section">
+        <div id="resultsContainer" class="results-container">
             <div class="table-container">
                 <table id="resultsTable">
                     <thead>
@@ -60,11 +65,11 @@
                             <th>Vendor</th>
                             <th>Serial Number</th>
                             <th>Model</th>
-                            <th>Status</th>
+                            <th>API Status</th>
+                            <th>Warranty Status</th>
                             <th>Warranty Type</th>
                             <th>End Date</th>
                             <th>Days Remaining</th>
-                            <th>Message</th>
                         </tr>
                     </thead>
                     <tbody id="resultsBody">
