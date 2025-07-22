@@ -495,3 +495,34 @@ th {
 .test-result:empty {
     display: none;
 }
+
+/* Persistent Messages */
+.message-persistent {
+    position: relative;
+    padding-right: 40px; /* Space for close button */
+}
+
+.message-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.7;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.message-close:hover {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.1);
+}
