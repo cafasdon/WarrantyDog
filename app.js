@@ -162,21 +162,119 @@ class WarrantyChecker {
         }
 
         const firstRow = this.csvData[0];
-        const hasVendor = 'vendor' in firstRow;
-        const hasIdentifier = 'service_tag' in firstRow || 'serial' in firstRow;
 
-        if (!hasVendor) {
-            this.showError('CSV must have a "vendor" column.');
+        // Check for simple format (vendor, service_tag columns)
+        const hasSimpleFormat = 'vendor' in firstRow && ('service_tag' in firstRow || 'serial' in firstRow);
+
+        // Check for system report format (Device Serial Number, Base Board Manufacturer)
+        const hasSystemReportFormat = 'Device Serial Number' in firstRow && 'Base Board Manufacturer' in firstRow;
+
+        if (!hasSimpleFormat && !hasSystemReportFormat) {
+            this.showError(`CSV format not recognized. Please ensure your CSV has either:
+
+Simple format: "vendor" and "service_tag" columns
+System Report format: "Device Serial Number" and "Base Board Manufacturer" columns
+
+Current columns: ${Object.keys(firstRow).join(', ')}`);
             return;
         }
 
-        if (!hasIdentifier) {
-            this.showError('CSV must have either a "service_tag" or "serial" column.');
+        // Filter and count valid devices
+        const validDevices = this.getValidDevicesFromCsv();
+
+        if (validDevices.length === 0) {
+            this.showError('No valid devices found in CSV. Please check that devices have serial numbers and recognized manufacturers.');
             return;
         }
 
-        this.showSuccess(`✅ CSV loaded successfully! Found ${this.csvData.length} devices.`);
+        this.showSuccess(`✅ CSV loaded successfully! Found ${validDevices.length} valid devices out of ${this.csvData.length} total rows.`);
         this.processBtn.disabled = false;
+    }
+
+    /**
+     * Get valid devices from CSV data, handling both simple and system report formats
+     */
+    getValidDevicesFromCsv() {
+        return this.csvData.filter(row => {
+            // Skip virtual machines and invalid entries
+            if (this.isVirtualMachine(row)) return false;
+
+            const serialNumber = this.extractSerialNumber(row);
+            const vendor = this.extractVendor(row);
+
+            return serialNumber && vendor && this.isSupportedVendor(vendor);
+        }).map(row => {
+            return {
+                originalData: row,
+                vendor: this.extractVendor(row),
+                serialNumber: this.extractSerialNumber(row),
+                model: this.extractModel(row),
+                deviceName: this.extractDeviceName(row),
+                location: this.extractLocation(row)
+            };
+        });
+    }
+
+    /**
+     * Check if device is a virtual machine
+     */
+    isVirtualMachine(row) {
+        const model = (row['System Model'] || row['model'] || '').toLowerCase();
+        const manufacturer = (row['Base Board Manufacturer'] || row['vendor'] || '').toLowerCase();
+
+        return model.includes('vmware') ||
+               model.includes('virtual') ||
+               manufacturer.includes('vmware') ||
+               (row['Device Serial Number'] || '').startsWith('VMware-');
+    }
+
+    /**
+     * Extract serial number from row
+     */
+    extractSerialNumber(row) {
+        return row['Device Serial Number'] || row['service_tag'] || row['serial'] || '';
+    }
+
+    /**
+     * Extract vendor from row
+     */
+    extractVendor(row) {
+        const manufacturer = row['Base Board Manufacturer'] || row['vendor'] || '';
+
+        // Normalize vendor names
+        if (manufacturer.toLowerCase().includes('dell')) return 'dell';
+        if (manufacturer.toLowerCase().includes('lenovo')) return 'lenovo';
+        if (manufacturer.toLowerCase().includes('microsoft')) return 'hp'; // Treat Surface as HP for now
+
+        return manufacturer.toLowerCase();
+    }
+
+    /**
+     * Extract model from row
+     */
+    extractModel(row) {
+        return row['System Model'] || row['model'] || row['description'] || '';
+    }
+
+    /**
+     * Extract device name from row
+     */
+    extractDeviceName(row) {
+        return row['Name'] || row['Friendly Name'] || row['device_name'] || '';
+    }
+
+    /**
+     * Extract location from row
+     */
+    extractLocation(row) {
+        return row['Site Name'] || row['Site Friendly Name'] || row['location'] || '';
+    }
+
+    /**
+     * Check if vendor is supported
+     */
+    isSupportedVendor(vendor) {
+        return ['dell', 'lenovo', 'hp'].includes(vendor.toLowerCase());
     }
 
     /**
@@ -209,35 +307,40 @@ class WarrantyChecker {
      * Process all devices in the CSV
      */
     async processDevices() {
-        const total = this.csvData.length;
+        const validDevices = this.getValidDevicesFromCsv();
+        const total = validDevices.length;
         let processed = 0;
         let successful = 0;
         let failed = 0;
 
-        for (const device of this.csvData) {
+        this.showMessage(`Processing ${total} valid devices...`, 'info');
+
+        for (const device of validDevices) {
             this.currentIndex = processed;
             this.updateProgress(processed, total, successful, failed);
 
             try {
-                const vendor = device.vendor?.toLowerCase();
-                const identifier = device.service_tag || device.serial;
+                const result = await this.warrantyService.lookupWarranty(device.vendor, device.serialNumber);
 
-                if (!vendor || !identifier) {
-                    throw new Error('Missing vendor or identifier');
-                }
+                // Enhance result with additional device information
+                result.originalData = device.originalData;
+                result.deviceName = device.deviceName;
+                result.location = device.location;
+                result.model = result.model || device.model;
 
-                const result = await this.warrantyService.lookupWarranty(vendor, identifier);
-                result.originalData = device; // Keep original CSV data
                 this.processedResults.push(result);
                 successful++;
 
             } catch (error) {
                 const errorResult = {
-                    vendor: device.vendor || 'Unknown',
-                    serviceTag: device.service_tag || device.serial || 'Unknown',
+                    vendor: device.vendor,
+                    serviceTag: device.serialNumber,
                     status: 'error',
                     message: error.message,
-                    originalData: device
+                    originalData: device.originalData,
+                    deviceName: device.deviceName,
+                    location: device.location,
+                    model: device.model
                 };
                 this.processedResults.push(errorResult);
                 failed++;
@@ -270,6 +373,21 @@ class WarrantyChecker {
         this.resultsContainer.style.display = 'block';
         this.exportBtn.disabled = false;
 
+        // Update table headers for enhanced information
+        const thead = this.resultsTable.querySelector('thead tr');
+        thead.innerHTML = `
+            <th>Device Name</th>
+            <th>Location</th>
+            <th>Vendor</th>
+            <th>Serial Number</th>
+            <th>Model</th>
+            <th>Status</th>
+            <th>Warranty Type</th>
+            <th>End Date</th>
+            <th>Days Remaining</th>
+            <th>Message</th>
+        `;
+
         // Clear existing table
         const tbody = this.resultsTable.querySelector('tbody');
         tbody.innerHTML = '';
@@ -278,8 +396,11 @@ class WarrantyChecker {
         this.processedResults.forEach(result => {
             const row = tbody.insertRow();
             row.innerHTML = `
+                <td>${result.deviceName || 'Unknown'}</td>
+                <td>${result.location || 'Unknown'}</td>
                 <td>${result.vendor || 'Unknown'}</td>
-                <td>${result.serviceTag || result.originalData?.service_tag || result.originalData?.serial || 'Unknown'}</td>
+                <td>${result.serviceTag || 'Unknown'}</td>
+                <td>${result.model || 'Unknown'}</td>
                 <td><span class="status-${result.status}">${this.formatStatus(result.status)}</span></td>
                 <td>${result.warrantyType || 'N/A'}</td>
                 <td>${result.endDate || 'N/A'}</td>
@@ -309,18 +430,27 @@ class WarrantyChecker {
         if (this.processedResults.length === 0) return;
 
         const csvData = this.processedResults.map(result => ({
+            device_name: result.deviceName || '',
+            location: result.location || '',
             vendor: result.vendor,
-            service_tag: result.serviceTag,
-            status: result.status,
+            serial_number: result.serviceTag,
+            model: result.model || '',
+            warranty_status: result.status,
             warranty_type: result.warrantyType || '',
-            start_date: result.startDate || '',
-            end_date: result.endDate || '',
+            warranty_start_date: result.startDate || '',
+            warranty_end_date: result.endDate || '',
             days_remaining: result.daysRemaining || '',
             is_active: result.isActive || false,
-            model: result.model || '',
+            ship_date: result.shipDate || '',
             message: result.message || '',
-            // Include original CSV data
-            ...result.originalData
+            lookup_date: new Date().toISOString().split('T')[0],
+            // Include key original CSV data for reference
+            original_name: result.originalData?.Name || '',
+            original_model: result.originalData?.['System Model'] || '',
+            processor: result.originalData?.Processor || '',
+            ram_gb: result.originalData?.['RAM (GB)'] || '',
+            installed_date: result.originalData?.['Installed Date'] || '',
+            last_check_date: result.originalData?.['Last Check Date'] || ''
         }));
 
         const csv = Papa.unparse(csvData);
