@@ -153,6 +153,11 @@ th {
     font-weight: bold;
 }
 
+.status.configured-unvalidated {
+    color: #ffc107;
+    font-weight: bold;
+}
+
 .status.not-configured {
     color: #dc3545;
     font-weight: bold;

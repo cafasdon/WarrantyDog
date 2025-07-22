@@ -90,23 +90,26 @@
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
-                <div class="config-section">
-                    <h3>🔧 Dell API Configuration</h3>
-                    <input type="password" id="dellApiKey" placeholder="Enter Dell API Key">
-                    <p class="config-help">
-                        Get your API key from <a href="https://developer.dell.com/" target="_blank">Dell Developer Portal</a>
-                    </p>
-                </div>
+                <form id="apiConfigForm">
+                    <div class="config-section">
+                        <h3>🔧 Dell API Configuration</h3>
+                        <input type="password" id="dellApiKey" placeholder="Enter Dell API Key" autocomplete="current-password">
+                        <p class="config-help">
+                            Get your API key from <a href="https://developer.dell.com/" target="_blank">Dell Developer Portal</a><br>
+                            <small>⚠️ Note: API key validation is limited in browsers due to CORS policy. The key will be tested during actual warranty processing.</small>
+                        </p>
+                    </div>
 
-                <div class="config-section">
-                    <h3>🚧 Lenovo API (Coming Soon)</h3>
-                    <input type="password" id="lenovoApiKey" placeholder="Coming soon" disabled>
-                </div>
+                    <div class="config-section">
+                        <h3>🚧 Lenovo API (Coming Soon)</h3>
+                        <input type="password" id="lenovoApiKey" placeholder="Coming soon" disabled autocomplete="off">
+                    </div>
 
-                <div class="config-section">
-                    <h3>🚧 HP API (Coming Soon)</h3>
-                    <input type="password" id="hpApiKey" placeholder="Coming soon" disabled>
-                </div>
+                    <div class="config-section">
+                        <h3>🚧 HP API (Coming Soon)</h3>
+                        <input type="password" id="hpApiKey" placeholder="Coming soon" disabled autocomplete="off">
+                    </div>
+                </form>
 
                 <div class="modal-footer">
                     <button id="saveConfig" class="btn btn-primary">Save Configuration</button>
