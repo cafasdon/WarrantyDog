@@ -627,6 +627,19 @@ th {
     border-color: #545b62;
 }
 
+/* Retry Failed Button */
+#retryFailedBtn {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+#retryFailedBtn:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+    color: #212529;
+}
+
 /* Persistent Messages */
 .message-persistent {
     position: relative;

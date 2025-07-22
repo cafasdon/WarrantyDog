@@ -43,6 +43,7 @@ class WarrantyChecker {
         // Processing elements
         this.processBtn = document.getElementById('processBtn');
         this.cancelBtn = document.getElementById('cancelBtn');
+        this.retryFailedBtn = document.getElementById('retryFailedBtn');
         this.progressContainer = document.getElementById('progressContainer');
         this.progressBar = document.getElementById('progressBar');
         this.progressText = document.getElementById('progressText');
@@ -120,6 +121,7 @@ class WarrantyChecker {
         // Processing events
         this.processBtn.addEventListener('click', () => this.startProcessing());
         this.cancelBtn.addEventListener('click', () => this.cancelProcessing());
+        this.retryFailedBtn.addEventListener('click', () => this.retryFailedDevices());
 
         // Session management events
         if (this.clearSessionBtn) {
@@ -679,11 +681,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         failed = this.resumeData.failed;
         skipped = this.resumeData.skipped;
 
-        for (let i = 0; i < allDevices.length; i++) {
-            const device = allDevices[i];
+        // Determine which devices to process
+        const devicesToProcess = this.resumeData && this.resumeData.retryMode
+            ? this.resumeData.retryDevices
+            : allDevices;
 
-            // Skip already processed devices if resuming
-            if (i < this.resumeData.startIndex) {
+        for (let i = 0; i < devicesToProcess.length; i++) {
+            const device = devicesToProcess[i];
+
+            // Skip already processed devices if resuming (but not in retry mode)
+            if (!this.resumeData?.retryMode && i < this.resumeData.startIndex) {
                 continue;
             }
             // Check if processing was cancelled
@@ -693,7 +700,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
 
             this.currentIndex = processed;
-            this.updateProgress(processed, total, successful, failed, skipped, device);
+
+            // Adjust total for retry mode
+            const effectiveTotal = this.resumeData?.retryMode ? devicesToProcess.length : total;
+            this.updateProgress(processed, effectiveTotal, successful, failed, skipped, device);
 
             // Find the table row for this device
             const deviceIndex = allDevices.indexOf(device);
@@ -723,6 +733,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     model: device.model
                 };
                 this.processedResults.push(skipResult);
+
+                // Mark device as skipped
+                device.processingState = 'skipped';
+                device.lastProcessed = new Date().toISOString();
+                device.skipReason = !device.isSupported ? 'Vendor not supported' : 'API not configured';
 
                 processed++;
                 continue;
@@ -754,6 +769,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     this.updateRowWithWarrantyData(row, result);
                 }
 
+                // Mark device as successfully processed
+                device.processingState = 'success';
+                device.lastProcessed = new Date().toISOString();
+
             } catch (error) {
                 const errorResult = {
                     vendor: device.vendor,
@@ -772,6 +791,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 if (row) {
                     this.updateRowWithWarrantyData(row, errorResult);
                 }
+
+                // Mark device as failed with error details
+                device.processingState = 'failed';
+                device.lastProcessed = new Date().toISOString();
+                device.errorMessage = error.message;
+                device.isRetryable = this.isRetryableError(error);
             }
 
             processed++;
@@ -793,6 +818,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         if (!this.processingCancelled) {
             this.clearSession();
         }
+
+        // Show retry failed button if there are failed devices
+        this.updateRetryFailedButton();
     }
 
     /**
@@ -849,7 +877,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             message += `⏭️ Skipped: ${skipped} (unconfigured vendors)`;
         }
 
+        // Add retry information if there are retryable failures
+        const retryableFailures = this.getFailedDevices().length;
+        if (retryableFailures > 0) {
+            message += `\n\n🔄 ${retryableFailures} failed devices can be retried`;
+        }
+
         this.showSuccess(message);
+
+        // Update retry button visibility
+        this.updateRetryFailedButton();
     }
 
     /**
@@ -1587,6 +1624,99 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             failed: session.failed,
             skipped: session.skipped
         };
+    }
+
+    /**
+     * Retry Failed Devices Functionality
+     */
+
+    /**
+     * Update the retry failed button visibility
+     */
+    updateRetryFailedButton() {
+        if (!this.retryFailedBtn) return;
+
+        const failedDevices = this.getFailedDevices();
+        if (failedDevices.length > 0) {
+            this.retryFailedBtn.style.display = 'inline-block';
+            this.retryFailedBtn.textContent = `🔄 Retry Failed (${failedDevices.length})`;
+        } else {
+            this.retryFailedBtn.style.display = 'none';
+        }
+    }
+
+    /**
+     * Get list of failed devices that can be retried
+     */
+    getFailedDevices() {
+        return this.csvData.filter(device =>
+            device.processingState === 'failed' &&
+            device.isRetryable !== false &&
+            device.isSupported &&
+            device.apiConfigured
+        );
+    }
+
+    /**
+     * Check if an error is retryable
+     */
+    isRetryableError(error) {
+        const retryablePatterns = [
+            'rate_limit_exceeded',
+            'timeout',
+            'network',
+            '500',
+            '502',
+            '503',
+            '504',
+            'temporary'
+        ];
+
+        return retryablePatterns.some(pattern =>
+            error.message && error.message.toLowerCase().includes(pattern.toLowerCase())
+        );
+    }
+
+    /**
+     * Retry processing for failed devices only
+     */
+    async retryFailedDevices() {
+        const failedDevices = this.getFailedDevices();
+
+        if (failedDevices.length === 0) {
+            this.showMessage('No failed devices to retry', 'info');
+            return;
+        }
+
+        const confirmMessage = `Retry processing for ${failedDevices.length} failed devices?\n\n` +
+            `This will attempt to process only the devices that failed previously.`;
+
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        // Reset failed devices for retry
+        failedDevices.forEach(device => {
+            device.processingState = 'pending';
+            device.errorMessage = null;
+            device.isRetryable = null;
+        });
+
+        // Set up retry-specific resume data
+        this.resumeData = {
+            startIndex: 0,
+            successful: this.csvData.filter(d => d.processingState === 'success').length,
+            failed: 0,
+            skipped: this.csvData.filter(d => d.processingState === 'skipped').length,
+            retryMode: true,
+            retryDevices: failedDevices
+        };
+
+        // Hide retry button during processing
+        this.retryFailedBtn.style.display = 'none';
+
+        // Start processing
+        await this.startProcessing();
     }
 }
 
