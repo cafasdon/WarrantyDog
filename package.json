@@ -1,0 +1,106 @@
+{
+  "name": "warrantydog",
+  "version": "1.0.0",
+  "description": "Browser-based warranty checker for Dell, Lenovo, and HP devices with CSV processing and real-time progress tracking",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "dev": "live-server --port=8080 --host=0.0.0.0 --no-browser --watch=.",
+    "serve": "http-server -p 8080 -a 0.0.0.0 -c-1",
+    "start": "npm run dev",
+    "build": "echo 'No build step required - static files ready for deployment'",
+    "test": "echo 'Running tests...' && node tests/run-tests.js",
+    "lint": "eslint *.js --fix",
+    "format": "prettier --write '*.{js,html,css,md}'",
+    "validate": "npm run lint && npm run format",
+    "setup": "./scripts/setup.sh",
+    "docker:build": "./scripts/docker-dev.sh build",
+    "docker:start": "./scripts/docker-dev.sh start",
+    "docker:stop": "./scripts/docker-dev.sh stop",
+    "docker:shell": "./scripts/docker-dev.sh shell",
+    "docker:logs": "./scripts/docker-dev.sh logs",
+    "docker:clean": "./scripts/docker-dev.sh clean"
+  },
+  "keywords": [
+    "warranty",
+    "dell",
+    "lenovo",
+    "hp",
+    "csv",
+    "browser",
+    "javascript",
+    "api",
+    "warranty-checker",
+    "device-management"
+  ],
+  "author": "WarrantyDog Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/WarrantyDog.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/WarrantyDog/issues"
+  },
+  "homepage": "https://github.com/yourusername/WarrantyDog#readme",
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "http-server": "^14.1.1",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "@eslint/js": "^9.0.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "browserslist": [
+    "defaults",
+    "not IE 11",
+    "not op_mini all"
+  ],
+  "eslintConfig": {
+    "env": {
+      "browser": true,
+      "es2022": true,
+      "node": true
+    },
+    "extends": [
+      "eslint:recommended"
+    ],
+    "parserOptions": {
+      "ecmaVersion": 2022,
+      "sourceType": "module"
+    },
+    "rules": {
+      "no-unused-vars": "warn",
+      "no-console": "off",
+      "prefer-const": "error",
+      "no-var": "error"
+    },
+    "globals": {
+      "Papa": "readonly"
+    }
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 100,
+    "tabWidth": 2,
+    "useTabs": false
+  },
+  "files": [
+    "index.html",
+    "app.js",
+    "vendorApis.js",
+    "style.css",
+    "lib/",
+    "examples/",
+    "docs/",
+    "scripts/",
+    "README.md",
+    "LICENSE"
+  ]
+}

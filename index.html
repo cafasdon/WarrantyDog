@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WarrantyDog 🐕 - Hardware Warranty Checker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐕</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐕 WarrantyDog</h1>
+            <p class="subtitle">Hardware Warranty Checker</p>
+        </header>
+        
+        <div class="upload-section">
+            <input type="file" id="csvFile" accept=".csv" />
+            <label for="csvFile" class="file-label">
+                📁 Choose CSV File
+            </label>
+            <div class="file-info" id="fileInfo"></div>
+        </div>
+        
+        <div class="api-status" id="apiStatus">
+            <div class="status-item">
+                <span class="vendor">Dell:</span>
+                <span class="status" id="dellStatus">Not configured</span>
+            </div>
+            <div class="status-item">
+                <span class="vendor">Lenovo:</span>
+                <span class="status">Coming soon</span>
+            </div>
+            <div class="status-item">
+                <span class="vendor">HP:</span>
+                <span class="status">Coming soon</span>
+            </div>
+        </div>
+        
+        <div class="status-section">
+            <div id="status">Ready to process CSV</div>
+            <div class="progress-container">
+                <div id="progress" class="progress-bar"></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="clearBtn" disabled>🗑️ Clear</button>
+            <button id="exportBtn" disabled>📥 Export Results</button>
+            <button id="configBtn">⚙️ Configure APIs</button>
+        </div>
+        
+        <div class="results-section">
+            <div class="table-container">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Vendor</th>
+                            <th>Serial Number</th>
+                            <th>Model</th>
+                            <th>Warranty Start</th>
+                            <th>Warranty End</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ API Configuration</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="config-section">
+                    <h3>Dell API</h3>
+                    <input type="password" id="dellApiKey" placeholder="Enter Dell API Key">
+                    <button onclick="saveDellKey()">Save</button>
+                    <p class="config-help">
+                        Get your API key from <a href="https://developer.dell.com/" target="_blank">Dell Developer Portal</a>
+                    </p>
+                </div>
+                
+                <div class="config-section">
+                    <h3>Lenovo API</h3>
+                    <input type="password" id="lenovoApiKey" placeholder="Coming soon" disabled>
+                    <button disabled>Save</button>
+                </div>
+                
+                <div class="config-section">
+                    <h3>HP API</h3>
+                    <input type="password" id="hpApiKey" placeholder="Coming soon" disabled>
+                    <button disabled>Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>WarrantyDog v0.1.0 | <a href="https://github.com/yourusername/WarrantyDog" target="_blank">GitHub</a></p>
+    </footer>
+    
+    <script src="lib/papaparse.min.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

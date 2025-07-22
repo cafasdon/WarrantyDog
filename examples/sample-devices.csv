@@ -1,0 +1,12 @@
+vendor,service_tag,description,location
+Dell,ABC1234,Dell OptiPlex 7090,Office-Floor1
+Dell,XYZ5678,Dell Latitude 5520,Remote-User1
+Dell,DEF9012,Dell PowerEdge R740,DataCenter-Rack1
+Dell,GHI3456,Dell Inspiron 15 3000,Office-Floor2
+Dell,JKL7890,Dell Precision 5560,Engineering-Lab
+Lenovo,LEN001,ThinkPad X1 Carbon,Office-Floor2
+Lenovo,LEN002,ThinkCentre M720q,Reception-Desk
+Lenovo,LEN003,ThinkPad T14,Remote-User2
+HP,HP001,EliteBook 840 G8,Office-Floor3
+HP,HP002,ProDesk 400 G7,Accounting-Dept
+HP,HP003,ZBook Studio G8,Design-Studio
