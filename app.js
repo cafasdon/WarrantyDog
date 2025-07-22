@@ -476,25 +476,33 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         const processableCount = devices.filter(d => d.isSupported && d.apiConfigured).length;
         const unsupportedCount = devices.filter(d => !d.isSupported).length;
         const unconfiguredCount = devices.filter(d => d.isSupported && !d.apiConfigured).length;
+        const skipCount = unsupportedCount + unconfiguredCount;
 
         // Update process button text
         if (processableCount === 0) {
             this.processBtn.textContent = 'No Devices Ready for Processing';
             this.processBtn.disabled = true;
         } else {
-            this.processBtn.textContent = `Process ${processableCount} Device${processableCount !== 1 ? 's' : ''}`;
+            const buttonText = skipCount > 0 ?
+                `Process ${processableCount} Device${processableCount !== 1 ? 's' : ''} (Skip ${skipCount})` :
+                `Process ${processableCount} Device${processableCount !== 1 ? 's' : ''}`;
+            this.processBtn.textContent = buttonText;
             this.processBtn.disabled = false;
         }
 
         // Show status summary
         let statusMessage = `📊 Device Summary: ${devices.length} total devices detected\n`;
         statusMessage += `✅ Ready for processing: ${processableCount}\n`;
-        if (unconfiguredCount > 0) {
-            statusMessage += `⚙️ Need API configuration: ${unconfiguredCount}\n`;
+        if (skipCount > 0) {
+            statusMessage += `⏭️ Will be skipped: ${skipCount}\n`;
+            if (unconfiguredCount > 0) {
+                statusMessage += `  ⚙️ Need API configuration: ${unconfiguredCount}\n`;
+            }
+            if (unsupportedCount > 0) {
+                statusMessage += `  ❌ Unsupported vendors: ${unsupportedCount}\n`;
+            }
         }
-        if (unsupportedCount > 0) {
-            statusMessage += `❌ Unsupported vendors: ${unsupportedCount}`;
-        }
+        statusMessage += `\n💡 Tip: Configure API keys to process more devices!`;
 
         this.showMessage(statusMessage, 'info');
     }
@@ -553,20 +561,23 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Process devices that can be processed (Stage 2)
      */
     async processDevices() {
+        const allDevices = this.getValidDevicesFromCsv();
         const processableDevices = this.getProcessableDevices();
-        const total = processableDevices.length;
+        const total = allDevices.length;
+        const processableCount = processableDevices.length;
         let processed = 0;
         let successful = 0;
         let failed = 0;
+        let skipped = 0;
 
-        if (total === 0) {
+        if (processableCount === 0) {
             this.showError('No devices are ready for processing. Please configure API keys for supported vendors.');
             return;
         }
 
-        this.showMessage(`Processing ${total} device${total !== 1 ? 's' : ''} with configured APIs...`, 'info');
+        this.showMessage(`Processing ${total} total devices (${processableCount} processable, ${total - processableCount} will be skipped)...`, 'info');
 
-        for (const device of processableDevices) {
+        for (const device of allDevices) {
             // Check if processing was cancelled
             if (this.processingCancelled) {
                 console.log('Processing loop cancelled');
@@ -574,11 +585,40 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
 
             this.currentIndex = processed;
-            this.updateProgress(processed, total, successful, failed);
+            this.updateProgress(processed, total, successful, failed, skipped);
 
             // Find the table row for this device
-            const deviceIndex = this.getValidDevicesFromCsv().indexOf(device);
+            const deviceIndex = allDevices.indexOf(device);
             const row = this.resultsTable.querySelector(`tbody tr[data-device-index="${deviceIndex}"]`);
+
+            // Check if device can be processed (has configured API)
+            if (!device.isSupported || !device.apiConfigured) {
+                // Skip this device
+                skipped++;
+
+                if (row) {
+                    const skipReason = !device.isSupported ? 'Vendor Not Supported' : 'API Not Configured';
+                    row.querySelector('.warranty-status').innerHTML = `⏭️ Skipped`;
+                    row.querySelector('.warranty-type').textContent = skipReason;
+                    row.querySelector('.warranty-end').textContent = 'N/A';
+                    row.querySelector('.warranty-days').textContent = 'N/A';
+                }
+
+                const skipResult = {
+                    vendor: device.vendor,
+                    serviceTag: device.serialNumber,
+                    status: 'skipped',
+                    message: !device.isSupported ? 'Vendor not supported' : 'API not configured',
+                    originalData: device.originalData,
+                    deviceName: device.deviceName,
+                    location: device.location,
+                    model: device.model
+                };
+                this.processedResults.push(skipResult);
+
+                processed++;
+                continue;
+            }
 
             if (row) {
                 // Update status to processing
@@ -625,13 +665,14 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             processed++;
 
             // Respectful delay to prevent overwhelming the API (2 seconds between requests)
-            if (!this.processingCancelled && processed < total) {
+            // Only delay for actual API calls, not for skipped devices
+            if (!this.processingCancelled && processed < total && (device.isSupported && device.apiConfigured)) {
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
 
-        this.updateProgress(processed, total, successful, failed);
-        this.finalizeProcessing(successful, failed);
+        this.updateProgress(processed, total, successful, failed, skipped);
+        this.finalizeProcessing(successful, failed, skipped);
     }
 
     /**
@@ -652,13 +693,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Finalize processing and show summary
      */
-    finalizeProcessing(successful, failed) {
+    finalizeProcessing(successful, failed, skipped = 0) {
         this.exportBtn.disabled = false;
 
         let message = `✅ Processing complete!\n`;
         message += `✅ Successful: ${successful}\n`;
         if (failed > 0) {
-            message += `❌ Failed: ${failed}`;
+            message += `❌ Failed: ${failed}\n`;
+        }
+        if (skipped > 0) {
+            message += `⏭️ Skipped: ${skipped} (unconfigured vendors)`;
         }
 
         this.showSuccess(message);
@@ -667,11 +711,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Update progress display
      */
-    updateProgress(processed, total, successful, failed) {
+    updateProgress(processed, total, successful, failed, skipped = 0) {
         const percentage = Math.round((processed / total) * 100);
         this.progressBar.style.width = `${percentage}%`;
         this.progressText.textContent = `${processed}/${total} (${percentage}%)`;
-        this.statusText.textContent = `✅ ${successful} successful, ❌ ${failed} failed`;
+        this.statusText.textContent = `✅ ${successful} successful, ❌ ${failed} failed, ⏭️ ${skipped} skipped`;
     }
 
     /**
@@ -744,7 +788,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             serial_number: result.serviceTag,
             model: result.model || '',
             warranty_status: result.status,
-            warranty_type: result.warrantyType || '',
+            warranty_type: result.warrantyType || (result.status === 'skipped' ? 'Skipped - ' + result.message : ''),
             warranty_start_date: result.startDate || '',
             warranty_end_date: result.endDate || '',
             days_remaining: result.daysRemaining || '',
@@ -752,6 +796,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             ship_date: result.shipDate || '',
             message: result.message || '',
             lookup_date: new Date().toISOString().split('T')[0],
+            processing_notes: result.status === 'skipped' ? 'Device skipped - ' + result.message :
+                             result.status === 'error' ? 'Processing failed - ' + result.message :
+                             'Successfully processed',
             // Include key original CSV data for reference
             original_name: result.originalData?.Name || '',
             original_model: result.originalData?.['System Model'] || '',
