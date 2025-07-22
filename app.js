@@ -56,6 +56,7 @@ class WarrantyChecker {
         this.dellApiKeyInput = document.getElementById('dellApiKey');
         this.testDellApiBtn = document.getElementById('testDellApi');
         this.testResultElement = document.getElementById('testResult');
+        this.demoModeCheckbox = document.getElementById('demoMode');
 
         // API status elements
         this.apiStatusContainer = document.getElementById('apiStatus');
@@ -996,8 +997,15 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     if (isValid) {
                         // Save the key after successful validation
                         localStorage.setItem('dell_api_key', dellApiKey);
+
+                        // Save demo mode setting
+                        const demoMode = this.demoModeCheckbox ? this.demoModeCheckbox.checked : false;
+                        localStorage.setItem('demo_mode', demoMode.toString());
+
                         this.updateApiStatus();
-                        this.showSuccess('✅ Dell API key format validated and saved successfully! The key will be tested with actual API calls during warranty processing.');
+
+                        const modeText = demoMode ? ' Demo mode enabled - API responses will be simulated.' : ' The key will be tested with actual API calls during warranty processing.';
+                        this.showSuccess('✅ Dell API key format validated and saved successfully!' + modeText);
                     }
                 } catch (error) {
                     // Validation failed - don't save the key
