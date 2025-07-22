@@ -1,3 +1,4 @@
+
 # WarrantyDog 🐕
 
 A browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs.
@@ -230,6 +231,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 **Development powered by Docker 🐳**
 
 # On GitHub, create a new private repository named "WarrantyDog"
+
 
 
 
