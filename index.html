@@ -93,14 +93,18 @@
                 <form id="apiConfigForm">
                     <div class="config-section">
                         <h3>🔧 Dell API Configuration</h3>
-                        <input type="password" id="dellApiKey" placeholder="Enter Dell API Key" autocomplete="current-password">
+                        <div class="api-credentials">
+                            <input type="password" id="dellApiKey" placeholder="Enter Dell API Key" autocomplete="current-password">
+                            <input type="password" id="dellApiSecret" placeholder="Enter Dell API Secret" autocomplete="current-password">
+                        </div>
                         <div class="api-test-controls">
                             <button type="button" id="testDellApi" class="btn btn-secondary" disabled>🧪 Test API Connection</button>
                             <span id="testResult" class="test-result"></span>
                         </div>
                         <p class="config-help">
-                            Get your API key from <a href="https://developer.dell.com/" target="_blank">Dell Developer Portal</a><br>
-                            <small>💡 Tip: API calls will be processed through a backend proxy to avoid CORS issues.</small>
+                            Get your API credentials from <a href="https://techdirect.dell.com/portal/AboutAPIs.aspx" target="_blank">Dell TechDirect API Portal</a><br>
+                            <small>⚠️ Dell requires both API Key AND API Secret for OAuth 2.0 authentication (changed Dec 2019)</small><br>
+                            <small>💡 Tip: API calls use OAuth 2.0 tokens generated from your credentials.</small>
                         </p>
                     </div>
 
