@@ -107,7 +107,13 @@ class DellAPI {
 
         try {
             const apiKey = this.getApiKey();
-            const url = `${this.baseUrl}/asset-entitlements`;
+            const params = new URLSearchParams({
+                servicetags: serviceTag
+            });
+            const url = `${this.baseUrl}/asset-entitlements?${params.toString()}`;
+
+            console.log('Dell API Request:', url);
+            console.log('API Key length:', apiKey.length);
 
             const response = await fetch(url, {
                 method: 'GET',
@@ -115,18 +121,22 @@ class DellAPI {
                     'X-Dell-Api-Key': apiKey,
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
-                },
-                // Add service tag as query parameter
-                ...this.buildRequestParams(serviceTag)
+                }
             });
 
             this.rateLimiter.recordRequest();
 
+            console.log('Dell API Response Status:', response.status);
+            console.log('Dell API Response Headers:', Object.fromEntries(response.headers.entries()));
+
             if (!response.ok) {
-                throw new Error(await this.handleErrorResponse(response));
+                const errorMessage = await this.handleErrorResponse(response);
+                console.error('Dell API Error Response:', errorMessage);
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
+            console.log('Dell API Response Data:', data);
             return this.parseWarrantyResponse(data, serviceTag);
 
         } catch (error) {
@@ -135,20 +145,7 @@ class DellAPI {
         }
     }
 
-    /**
-     * Build request parameters for Dell API
-     */
-    buildRequestParams(serviceTag) {
-        const params = new URLSearchParams({
-            servicetags: serviceTag
-        });
 
-        return {
-            method: 'GET',
-            // Append query parameters to URL
-            url: `${this.baseUrl}/asset-entitlements?${params.toString()}`
-        };
-    }
 
     /**
      * Handle API error responses
