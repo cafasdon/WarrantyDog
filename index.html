@@ -47,6 +47,24 @@
                 <div id="progressBar" class="progress-bar"></div>
                 <div id="progressText">0%</div>
                 <div id="statusText"></div>
+                <div class="live-stats" id="liveStats" style="display: none;">
+                    <div class="stat-item">
+                        <span class="stat-label">Processed:</span>
+                        <span class="stat-value" id="processedCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Success:</span>
+                        <span class="stat-value success" id="successCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Failed:</span>
+                        <span class="stat-value error" id="failedCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Skipped:</span>
+                        <span class="stat-value skipped" id="skippedCount">0</span>
+                    </div>
+                </div>
             </div>
         </div>
         

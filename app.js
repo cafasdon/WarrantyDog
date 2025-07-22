@@ -42,6 +42,11 @@ class WarrantyChecker {
         this.progressBar = document.getElementById('progressBar');
         this.progressText = document.getElementById('progressText');
         this.statusText = document.getElementById('statusText');
+        this.liveStats = document.getElementById('liveStats');
+        this.processedCountElement = document.getElementById('processedCount');
+        this.successCountElement = document.getElementById('successCount');
+        this.failedCountElement = document.getElementById('failedCount');
+        this.skippedCountElement = document.getElementById('skippedCount');
 
         // Results elements
         this.resultsContainer = document.getElementById('resultsContainer');
@@ -643,6 +648,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         this.showMessage(`Processing ${total} total devices (${processableCount} processable, ${total - processableCount} will be skipped)...`, 'info');
 
+        // Track processing start time for ETA calculation
+        this.processingStartTime = Date.now();
+
         for (const device of allDevices) {
             // Check if processing was cancelled
             if (this.processingCancelled) {
@@ -651,7 +659,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
 
             this.currentIndex = processed;
-            this.updateProgress(processed, total, successful, failed, skipped);
+            this.updateProgress(processed, total, successful, failed, skipped, device);
 
             // Find the table row for this device
             const deviceIndex = allDevices.indexOf(device);
@@ -687,8 +695,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
 
             if (row) {
-                // Update status to processing
+                // Update status to processing with enhanced visual feedback
                 row.querySelector('.warranty-status').innerHTML = '🔄 Processing...';
+                row.classList.add('processing');
+
+                // Scroll to current row to keep it visible
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
             try {
@@ -742,7 +754,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Update a table row with warranty data
+     * Update a table row with warranty data with enhanced visual feedback
      */
     updateRowWithWarrantyData(row, result) {
         const statusCell = row.querySelector('.warranty-status');
@@ -750,10 +762,34 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         const endCell = row.querySelector('.warranty-end');
         const daysCell = row.querySelector('.warranty-days');
 
+        // Remove processing class and add completion animation
+        row.classList.remove('processing');
+        row.classList.add('data-updated');
+
+        // Update cells with warranty data
         statusCell.innerHTML = `<span class="status-${result.status}">${this.formatStatus(result.status)}</span>`;
         typeCell.textContent = result.warrantyType || (result.status === 'error' ? 'Error' : 'N/A');
         endCell.textContent = result.endDate || 'N/A';
         daysCell.textContent = result.daysRemaining || 'N/A';
+
+        // Add visual feedback for successful data retrieval
+        if (result.status === 'active' || result.status === 'expired') {
+            row.classList.add('warranty-success');
+            // Flash green briefly to show successful update
+            setTimeout(() => {
+                row.classList.remove('warranty-success');
+            }, 2000);
+        } else if (result.status === 'error') {
+            row.classList.add('warranty-error');
+            setTimeout(() => {
+                row.classList.remove('warranty-error');
+            }, 2000);
+        }
+
+        // Remove the data-updated class after animation
+        setTimeout(() => {
+            row.classList.remove('data-updated');
+        }, 1000);
     }
 
     /**
@@ -775,13 +811,44 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Update progress display
+     * Update progress display with enhanced information
      */
-    updateProgress(processed, total, successful, failed, skipped = 0) {
+    updateProgress(processed, total, successful, failed, skipped = 0, currentDevice = null) {
         const percentage = Math.round((processed / total) * 100);
         this.progressBar.style.width = `${percentage}%`;
-        this.progressText.textContent = `${processed}/${total} (${percentage}%)`;
+
+        // Enhanced progress text with current device info
+        let progressText = `${processed}/${total} (${percentage}%)`;
+        if (currentDevice) {
+            progressText += ` - Processing: ${currentDevice.vendor} ${currentDevice.serialNumber}`;
+        }
+        this.progressText.textContent = progressText;
+
+        // Enhanced status with real-time counts
         this.statusText.textContent = `✅ ${successful} successful, ❌ ${failed} failed, ⏭️ ${skipped} skipped`;
+
+        // Update live statistics display
+        if (this.liveStats && processed > 0) {
+            this.liveStats.style.display = 'flex';
+            this.processedCountElement.textContent = processed;
+            this.successCountElement.textContent = successful;
+            this.failedCountElement.textContent = failed;
+            this.skippedCountElement.textContent = skipped;
+        }
+
+        // Add estimated time remaining if we have enough data
+        if (processed > 0 && processed < total) {
+            const avgTimePerDevice = (Date.now() - this.processingStartTime) / processed;
+            const remainingDevices = total - processed;
+            const estimatedTimeRemaining = Math.round((avgTimePerDevice * remainingDevices) / 1000);
+
+            if (estimatedTimeRemaining > 0) {
+                const minutes = Math.floor(estimatedTimeRemaining / 60);
+                const seconds = estimatedTimeRemaining % 60;
+                const timeText = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+                this.statusText.textContent += ` | ETA: ${timeText}`;
+            }
+        }
     }
 
     /**
