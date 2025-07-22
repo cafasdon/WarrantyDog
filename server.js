@@ -16,48 +16,75 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
-// Dell API proxy endpoint
+// Dell API proxy endpoint with OAuth 2.0 support
 app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
     try {
         const { serviceTag } = req.params;
         const apiKey = req.headers['x-dell-api-key'];
-        
-        if (!apiKey) {
-            return res.status(400).json({ 
-                error: 'Missing Dell API key in X-Dell-Api-Key header' 
+        const apiSecret = req.headers['x-dell-api-secret'];
+
+        if (!apiKey || !apiSecret) {
+            return res.status(400).json({
+                error: 'Missing Dell API credentials. Both X-Dell-Api-Key and X-Dell-Api-Secret headers are required for OAuth 2.0 authentication.'
             });
         }
 
         if (!serviceTag) {
-            return res.status(400).json({ 
-                error: 'Missing service tag parameter' 
+            return res.status(400).json({
+                error: 'Missing service tag parameter'
             });
         }
 
-        console.log(`Proxying Dell API request for service tag: ${serviceTag}`);
-        
-        // Make request to Dell API
-        const dellUrl = `https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements?servicetags=${serviceTag}`;
-        
-        const response = await fetch(dellUrl, {
+        console.log(`Generating OAuth token for Dell API request: ${serviceTag}`);
+
+        // Step 1: Generate OAuth 2.0 access token
+        const authUrl = 'https://apigtwb2c.us.dell.com/auth/oauth/v2/token';
+        const credentials = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+
+        const tokenResponse = await fetch(authUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${credentials}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'grant_type=client_credentials'
+        });
+
+        if (!tokenResponse.ok) {
+            const errorData = await tokenResponse.text();
+            console.error('OAuth token generation failed:', errorData);
+            return res.status(401).json({
+                error: 'Invalid Dell API key. Please check your API key configuration.',
+                details: errorData
+            });
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        console.log(`OAuth token generated successfully, making warranty request for: ${serviceTag}`);
+
+        // Step 2: Make warranty lookup request with Bearer token
+        const warrantyUrl = `https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements?servicetags=${serviceTag}`;
+
+        const warrantyResponse = await fetch(warrantyUrl, {
             method: 'GET',
             headers: {
-                'X-Dell-Api-Key': apiKey,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
             }
         });
 
-        const data = await response.json();
-        
+        const warrantyData = await warrantyResponse.json();
+
         // Return the response with proper status
-        res.status(response.status).json(data);
-        
+        res.status(warrantyResponse.status).json(warrantyData);
+
     } catch (error) {
         console.error('Dell API proxy error:', error);
-        res.status(500).json({ 
-            error: 'Internal server error', 
-            message: error.message 
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
         });
     }
 });

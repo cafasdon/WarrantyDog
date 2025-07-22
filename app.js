@@ -54,9 +54,9 @@ class WarrantyChecker {
         this.closeModal = document.querySelector('.close-modal');
         this.saveConfigBtn = document.getElementById('saveConfig');
         this.dellApiKeyInput = document.getElementById('dellApiKey');
+        this.dellApiSecretInput = document.getElementById('dellApiSecret');
         this.testDellApiBtn = document.getElementById('testDellApi');
         this.testResultElement = document.getElementById('testResult');
-        this.demoModeCheckbox = document.getElementById('demoMode');
 
         // API status elements
         this.apiStatusContainer = document.getElementById('apiStatus');
@@ -134,12 +134,17 @@ class WarrantyChecker {
 
         // Use event delegation for input changes
         document.addEventListener('input', (e) => {
-            if (e.target && e.target.id === 'dellApiKey') {
-                const hasKey = e.target.value.trim().length > 0;
-                console.log('API key input changed via delegation, hasKey:', hasKey);
+            if (e.target && (e.target.id === 'dellApiKey' || e.target.id === 'dellApiSecret')) {
+                const apiKeyInput = document.getElementById('dellApiKey');
+                const apiSecretInput = document.getElementById('dellApiSecret');
+                const hasKey = apiKeyInput && apiKeyInput.value.trim().length > 0;
+                const hasSecret = apiSecretInput && apiSecretInput.value.trim().length > 0;
+                const bothPresent = hasKey && hasSecret;
+
+                console.log('API credentials changed via delegation, hasKey:', hasKey, 'hasSecret:', hasSecret);
                 const testBtn = document.getElementById('testDellApi');
                 if (testBtn) {
-                    testBtn.disabled = !hasKey;
+                    testBtn.disabled = !bothPresent;
                     console.log('Test button disabled state:', testBtn.disabled);
                 } else {
                     console.error('Test button not found when trying to enable/disable');
@@ -907,12 +912,14 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         console.log('Initializing modal elements...');
 
         const testBtn = document.getElementById('testDellApi');
-        const apiInput = document.getElementById('dellApiKey');
+        const apiKeyInput = document.getElementById('dellApiKey');
+        const apiSecretInput = document.getElementById('dellApiSecret');
 
         console.log('Test button in modal:', testBtn);
-        console.log('API input in modal:', apiInput);
+        console.log('API key input in modal:', apiKeyInput);
+        console.log('API secret input in modal:', apiSecretInput);
 
-        if (testBtn && apiInput) {
+        if (testBtn && apiKeyInput && apiSecretInput) {
             console.log('Both elements found, setting up functionality');
 
             // Remove any existing listeners to avoid duplicates
@@ -976,46 +983,45 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         const dellApiKey = this.dellApiKeyInput.value.trim();
+        const dellApiSecret = this.dellApiSecretInput ? this.dellApiSecretInput.value.trim() : '';
+
         console.log('Dell API key length:', dellApiKey.length);
+        console.log('Dell API secret length:', dellApiSecret.length);
 
         // Show saving indicator
         this.saveConfigBtn.disabled = true;
         this.saveConfigBtn.textContent = 'Validating...';
 
         try {
-            if (dellApiKey) {
-                // Basic validation - check if key looks valid
+            if (dellApiKey && dellApiSecret) {
+                // Basic validation - check if both credentials look valid
                 if (dellApiKey.length < 10) {
                     throw new Error('API key appears to be too short. Please check your Dell API key.');
+                }
+                if (dellApiSecret.length < 10) {
+                    throw new Error('API secret appears to be too short. Please check your Dell API secret.');
                 }
 
                 // Perform mock validation first (format and structure checks)
                 try {
-                    this.showMessage('🔍 Validating Dell API key format...', 'info');
-                    const isValid = await this.validateDellApiKey(dellApiKey);
+                    this.showMessage('🔍 Validating Dell API credentials format...', 'info');
+                    const keyValid = await this.validateDellApiKey(dellApiKey);
+                    const secretValid = await this.validateDellApiKey(dellApiSecret);
 
-                    if (isValid) {
-                        // Save the key after successful validation
+                    if (keyValid && secretValid) {
+                        // Save both credentials after successful validation
                         localStorage.setItem('dell_api_key', dellApiKey);
-
-                        // Save demo mode setting
-                        const demoMode = this.demoModeCheckbox ? this.demoModeCheckbox.checked : false;
-                        localStorage.setItem('demo_mode', demoMode.toString());
-
+                        localStorage.setItem('dell_api_secret', dellApiSecret);
                         this.updateApiStatus();
-
-                        const modeText = demoMode ? ' Demo mode enabled - API responses will be simulated.' : ' The key will be tested with actual API calls during warranty processing.';
-                        this.showSuccess('✅ Dell API key format validated and saved successfully!' + modeText);
+                        this.showSuccess('✅ Dell API credentials format validated and saved successfully! OAuth 2.0 tokens will be generated during warranty processing.');
                     }
                 } catch (error) {
-                    // Validation failed - don't save the key
-                    this.showError(`❌ API Key Validation Failed: ${error.message}`);
-                    return; // Don't save invalid keys
+                    // Validation failed - don't save the credentials
+                    this.showError(`❌ API Credentials Validation Failed: ${error.message}`);
+                    return; // Don't save invalid credentials
                 }
             } else {
-                localStorage.removeItem('dell_api_key');
-                this.updateApiStatus();
-                this.showSuccess('✅ Dell API key removed.');
+                throw new Error('Both Dell API Key and API Secret are required for OAuth 2.0 authentication.');
             }
 
             // Close modal after successful save

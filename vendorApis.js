@@ -95,6 +95,17 @@ class DellAPI {
     }
 
     /**
+     * Get API secret from localStorage
+     */
+    getApiSecret() {
+        const secret = localStorage.getItem('dell_api_secret');
+        if (!secret) {
+            throw new Error('Dell API secret not configured. Please set your API secret in the configuration modal.');
+        }
+        return secret;
+    }
+
+    /**
      * Lookup warranty information for a Dell service tag
      * @param {string} serviceTag - Dell service tag
      * @returns {Promise<Object>} Warranty information
@@ -107,17 +118,20 @@ class DellAPI {
 
         try {
             const apiKey = this.getApiKey();
+            const apiSecret = this.getApiSecret();
 
             // Use backend proxy to avoid CORS issues
             const proxyUrl = `/api/dell/warranty/${serviceTag}`;
 
             console.log('Dell API Request via proxy:', proxyUrl);
             console.log('API Key length:', apiKey.length);
+            console.log('API Secret length:', apiSecret.length);
 
             const response = await fetch(proxyUrl, {
                 method: 'GET',
                 headers: {
                     'X-Dell-Api-Key': apiKey,
+                    'X-Dell-Api-Secret': apiSecret,
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 }

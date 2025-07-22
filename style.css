@@ -496,6 +496,18 @@ th {
     display: none;
 }
 
+/* API Credentials Layout */
+.api-credentials {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.api-credentials input {
+    width: 100%;
+}
+
 /* Persistent Messages */
 .message-persistent {
     position: relative;
