@@ -1,7 +1,28 @@
 
 # WarrantyDog 🐕
 
-A browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs.
+A browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs. **Now with full Dell OAuth 2.0 support and backend proxy for CORS-free API calls!**
+
+## ✅ **FULLY WORKING PROGRAM STATUS**
+
+**Current Status**: ✅ **Production Ready with Dell API Integration**
+
+### 🎉 **What's Working**
+- ✅ **Dell OAuth 2.0 Authentication**: Full implementation of Dell's required OAuth 2.0 flow
+- ✅ **Backend Proxy Server**: Express.js server eliminates CORS issues
+- ✅ **CSV Processing**: Upload, parse, and process device lists
+- ✅ **Smart Vendor Skipping**: Prevents API quota waste on unconfigured vendors
+- ✅ **Real-time Progress**: Live tracking with cancel functionality
+- ✅ **Persistent Statistics**: Device breakdown stays visible until dismissed
+- ✅ **Export Functionality**: Complete CSV export with warranty data
+- ✅ **Professional UX**: Mock validation, error handling, and user feedback
+
+### 🔧 **Technical Implementation**
+- **Frontend**: Vanilla JavaScript with comprehensive error handling
+- **Backend**: Node.js/Express proxy server for OAuth 2.0 token management
+- **Authentication**: Dell OAuth 2.0 with API Key + Secret → Bearer token flow
+- **CORS Solution**: Backend proxy eliminates browser CORS limitations
+- **Data Processing**: CSV parsing with vendor detection and smart filtering
 
 ## 🚀 Quick Start with Docker
 
@@ -24,6 +45,30 @@ npm run dev         # Start development server
 ```
 
 Then open http://localhost:8080 in your browser.
+
+## 🚀 **Quick Start with Backend Server (Recommended)**
+
+For the full working experience with Dell API integration:
+
+### Prerequisites
+- Node.js 16+ installed
+- Dell API credentials (Key + Secret) from [Dell TechDirect](https://techdirect.dell.com/portal/AboutAPIs.aspx)
+
+### Setup and Run
+```bash
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
+npm install
+npm run server
+```
+
+Then open **http://localhost:3001** in your browser.
+
+### What You Get
+- ✅ **Full Dell API Integration** with OAuth 2.0
+- ✅ **No CORS Issues** - backend proxy handles all API calls
+- ✅ **Real Warranty Data** - actual Dell warranty lookups
+- ✅ **Professional UX** - complete feature set
 
 ## 🐳 Docker Development Environment
 
@@ -215,6 +260,32 @@ fetch('https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements?servic
   headers: { 'X-Dell-Api-Key': 'your_key' }
 })
 ```
+
+## 🔐 **Dell API Configuration Guide**
+
+### Getting Dell API Credentials
+1. **Visit**: [Dell TechDirect API Portal](https://techdirect.dell.com/portal/AboutAPIs.aspx)
+2. **Request Access**: Apply for API access through your Dell account
+3. **Get Credentials**: You'll receive both:
+   - **API Key**: Your unique identifier
+   - **API Secret**: Required for OAuth 2.0 (since Dec 2019)
+
+### Configuring in WarrantyDog
+1. **Start Backend Server**: `npm run server`
+2. **Open Application**: http://localhost:3001
+3. **Configure APIs**: Click "⚙️ Configure APIs"
+4. **Enter Both Credentials**:
+   - Dell API Key: `your-api-key-here`
+   - Dell API Secret: `your-api-secret-here`
+5. **Test Connection**: Click "🧪 Test API Connection"
+6. **Save**: Both credentials are validated and saved
+
+### OAuth 2.0 Authentication Flow
+```
+Frontend → Backend → Dell OAuth → Bearer Token → Dell API → Warranty Data
+```
+
+**Important**: Dell requires OAuth 2.0 authentication since December 2019. The old API key-only method no longer works.
 
 ## 📝 License
 
