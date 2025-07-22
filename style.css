@@ -246,6 +246,16 @@ th {
     background: #545b62;
 }
 
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    font-weight: 500;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #c82333;
+}
+
 /* Progress container */
 .progress-container {
     margin: 15px 0;

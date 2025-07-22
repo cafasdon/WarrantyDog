@@ -16,6 +16,7 @@ class WarrantyChecker {
         this.csvData = [];
         this.processedResults = [];
         this.isProcessing = false;
+        this.processingCancelled = false;
         this.currentIndex = 0;
 
         this.initializeElements();
@@ -36,6 +37,7 @@ class WarrantyChecker {
 
         // Processing elements
         this.processBtn = document.getElementById('processBtn');
+        this.cancelBtn = document.getElementById('cancelBtn');
         this.progressContainer = document.getElementById('progressContainer');
         this.progressBar = document.getElementById('progressBar');
         this.progressText = document.getElementById('progressText');
@@ -63,6 +65,7 @@ class WarrantyChecker {
             dropZone: this.dropZone,
             fileInfo: this.fileInfo,
             processBtn: this.processBtn,
+            cancelBtn: this.cancelBtn,
             progressContainer: this.progressContainer,
             progressBar: this.progressBar,
             progressText: this.progressText,
@@ -99,6 +102,7 @@ class WarrantyChecker {
 
         // Processing events
         this.processBtn.addEventListener('click', () => this.startProcessing());
+        this.cancelBtn.addEventListener('click', () => this.cancelProcessing());
 
         // Export events
         this.exportBtn.addEventListener('click', () => this.exportResults());
@@ -502,8 +506,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         if (this.isProcessing) return;
 
         this.isProcessing = true;
+        this.processingCancelled = false;
         this.processBtn.disabled = true;
-        this.processBtn.textContent = 'Processing...';
+        this.processBtn.style.display = 'none';
+        this.cancelBtn.style.display = 'inline-block';
         this.progressContainer.style.display = 'block';
         this.resultsContainer.style.display = 'none';
 
@@ -513,12 +519,34 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         try {
             await this.processDevices();
         } catch (error) {
-            this.showError(`Processing failed: ${error.message}`);
+            if (!this.processingCancelled) {
+                this.showError(`Processing failed: ${error.message}`);
+            }
         } finally {
-            this.isProcessing = false;
-            this.processBtn.disabled = false;
-            this.processBtn.textContent = 'Process Warranties';
+            this.resetProcessingUI();
         }
+    }
+
+    /**
+     * Cancel warranty processing
+     */
+    cancelProcessing() {
+        console.log('Processing cancelled by user');
+        this.processingCancelled = true;
+        this.showMessage('⏹️ Processing cancelled by user', 'info');
+        this.resetProcessingUI();
+    }
+
+    /**
+     * Reset processing UI to initial state
+     */
+    resetProcessingUI() {
+        this.isProcessing = false;
+        this.processBtn.disabled = false;
+        this.processBtn.style.display = 'inline-block';
+        this.processBtn.textContent = 'Process Warranties';
+        this.cancelBtn.style.display = 'none';
+        this.progressContainer.style.display = 'none';
     }
 
     /**
@@ -539,6 +567,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.showMessage(`Processing ${total} device${total !== 1 ? 's' : ''} with configured APIs...`, 'info');
 
         for (const device of processableDevices) {
+            // Check if processing was cancelled
+            if (this.processingCancelled) {
+                console.log('Processing loop cancelled');
+                break;
+            }
+
             this.currentIndex = processed;
             this.updateProgress(processed, total, successful, failed);
 
@@ -590,8 +624,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             processed++;
 
-            // Small delay to prevent overwhelming the API
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Respectful delay to prevent overwhelming the API (2 seconds between requests)
+            if (!this.processingCancelled && processed < total) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
         }
 
         this.updateProgress(processed, total, successful, failed);
