@@ -102,7 +102,8 @@ class WarrantyChecker {
         this.dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
         this.dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.dropZone.addEventListener('drop', (e) => this.handleFileDrop(e));
-        this.dropZone.addEventListener('click', () => this.fileInput.click());
+
+        // Note: No click handler needed - the label handles this automatically
 
         // Processing events
         this.processBtn.addEventListener('click', () => this.startProcessing());
@@ -258,7 +259,7 @@ class WarrantyChecker {
         this.fileInfo.innerHTML = `
             <div class="file-details">
                 <strong>📄 ${file.name}</strong><br>
-                <small>Size: ${(file.size / 1024).toFixed(1)} KB</small>
+                <small>Size: ${(file.size / 1024).toFixed(1)} KB | Processing...</small>
             </div>
         `;
         this.fileInfo.style.display = 'block';
@@ -333,6 +334,14 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             this.showError('No valid devices found in CSV. Please check that devices have serial numbers and recognized manufacturers.');
             return;
         }
+
+        // Update file info with success
+        this.fileInfo.innerHTML = `
+            <div class="file-details">
+                <strong>📄 ${this.fileInfo.querySelector('.file-details strong').textContent.replace('📄 ', '')}</strong><br>
+                <small>✅ Processed successfully | ${validDevices.length} valid devices found</small>
+            </div>
+        `;
 
         this.showSuccess(`✅ CSV loaded successfully! Found ${validDevices.length} valid devices out of ${this.csvData.length} total rows.`);
 
@@ -541,7 +550,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             this.processBtn.disabled = false;
         }
 
-        // Show status summary
+        // Show status summary (persistent)
         let statusMessage = `📊 Device Summary: ${devices.length} total devices detected\n`;
         statusMessage += `✅ Ready for processing: ${processableCount}\n`;
         if (skipCount > 0) {
@@ -555,7 +564,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
         statusMessage += `\n💡 Tip: Configure API keys to process more devices!`;
 
-        this.showMessage(statusMessage, 'info');
+        this.showPersistentMessage(statusMessage, 'info');
     }
 
     /**
@@ -1273,6 +1282,43 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 messageDiv.remove();
             }
         }, 5000);
+    }
+
+    /**
+     * Show persistent message that doesn't auto-hide
+     */
+    showPersistentMessage(message, type) {
+        console.log(`Persistent Message (${type}):`, message);
+
+        // Remove existing persistent messages
+        const existingMessages = document.querySelectorAll('.message-persistent');
+        existingMessages.forEach(msg => msg.remove());
+
+        // Create new persistent message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${type} message-persistent`;
+        messageDiv.textContent = message;
+
+        // Add a small close button for manual dismissal
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '×';
+        closeBtn.className = 'message-close';
+        closeBtn.title = 'Dismiss';
+        closeBtn.addEventListener('click', () => {
+            messageDiv.remove();
+        });
+        messageDiv.appendChild(closeBtn);
+
+        // Insert at top of main content
+        const main = document.querySelector('main');
+        if (main) {
+            main.insertBefore(messageDiv, main.firstChild);
+        } else {
+            console.error('Main element not found, appending to body');
+            document.body.appendChild(messageDiv);
+        }
+
+        // No auto-remove for persistent messages
     }
 }
 
