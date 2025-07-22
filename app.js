@@ -79,6 +79,8 @@ class WarrantyChecker {
             configModal: this.configModal,
             saveConfigBtn: this.saveConfigBtn,
             dellApiKeyInput: this.dellApiKeyInput,
+            testDellApiBtn: this.testDellApiBtn,
+            testResultElement: this.testResultElement,
             dellStatusElement: this.dellStatusElement
         };
 
@@ -122,17 +124,27 @@ class WarrantyChecker {
 
         // API testing events
         if (this.testDellApiBtn) {
+            console.log('Test Dell API button found, adding event listener');
             this.testDellApiBtn.addEventListener('click', () => this.testDellApiConnection());
+        } else {
+            console.error('Test Dell API button not found!');
         }
 
         // Enable test button when API key is entered
         if (this.dellApiKeyInput) {
+            console.log('Dell API key input found, adding input event listener');
             this.dellApiKeyInput.addEventListener('input', () => {
                 const hasKey = this.dellApiKeyInput.value.trim().length > 0;
+                console.log('API key input changed, hasKey:', hasKey);
                 if (this.testDellApiBtn) {
                     this.testDellApiBtn.disabled = !hasKey;
+                    console.log('Test button disabled state:', this.testDellApiBtn.disabled);
+                } else {
+                    console.error('Test button not found when trying to enable/disable');
                 }
             });
+        } else {
+            console.error('Dell API key input not found!');
         }
 
         // Modal close on outside click
@@ -848,6 +860,32 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         if (this.configModal) {
             this.configModal.style.display = 'block';
             console.log('Modal displayed');
+
+            // Debug: Check if test button exists when modal is shown
+            const testBtn = document.getElementById('testDellApi');
+            const apiInput = document.getElementById('dellApiKey');
+            console.log('Test button in modal:', testBtn);
+            console.log('API input in modal:', apiInput);
+
+            if (testBtn && apiInput) {
+                // Manually set up the event if not already done
+                if (!testBtn.hasAttribute('data-listener-added')) {
+                    console.log('Adding event listeners to modal elements');
+                    testBtn.addEventListener('click', () => this.testDellApiConnection());
+                    testBtn.setAttribute('data-listener-added', 'true');
+
+                    apiInput.addEventListener('input', () => {
+                        const hasKey = apiInput.value.trim().length > 0;
+                        testBtn.disabled = !hasKey;
+                        console.log('Modal input changed, hasKey:', hasKey, 'button disabled:', testBtn.disabled);
+                    });
+
+                    // Initial state check
+                    const hasKey = apiInput.value.trim().length > 0;
+                    testBtn.disabled = !hasKey;
+                    console.log('Initial button state - hasKey:', hasKey, 'disabled:', testBtn.disabled);
+                }
+            }
         } else {
             console.error('Config modal element not found');
         }
