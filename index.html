@@ -94,9 +94,13 @@
                     <div class="config-section">
                         <h3>🔧 Dell API Configuration</h3>
                         <input type="password" id="dellApiKey" placeholder="Enter Dell API Key" autocomplete="current-password">
+                        <div class="api-test-controls">
+                            <button type="button" id="testDellApi" class="btn btn-secondary" disabled>🧪 Test API Connection</button>
+                            <span id="testResult" class="test-result"></span>
+                        </div>
                         <p class="config-help">
                             Get your API key from <a href="https://developer.dell.com/" target="_blank">Dell Developer Portal</a><br>
-                            <small>⚠️ Note: API key validation is limited in browsers due to CORS policy. The key will be tested during actual warranty processing.</small>
+                            <small>💡 Tip: Use "Test API Connection" to validate your key format and simulate API behavior without CORS issues.</small>
                         </p>
                     </div>
 
