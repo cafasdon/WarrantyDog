@@ -173,6 +173,11 @@ th {
     font-weight: bold;
 }
 
+.status-skipped {
+    color: #ffc107;
+    font-weight: bold;
+}
+
 /* Enhanced API status section */
 .api-status {
     background: #f8f9fa;
