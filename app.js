@@ -145,11 +145,13 @@ class WarrantyChecker {
 
         if (this.dellStatusElement) {
             if (dellApiKey && dellApiKey.trim().length > 0) {
-                this.dellStatusElement.textContent = '✅ Configured';
-                this.dellStatusElement.className = 'status configured';
+                this.dellStatusElement.textContent = '⚠️ Configured (Unvalidated)';
+                this.dellStatusElement.className = 'status configured-unvalidated';
+                this.dellStatusElement.title = 'API key is saved but cannot be validated from browser due to CORS policy. Will be tested during processing.';
             } else {
                 this.dellStatusElement.textContent = '❌ Not configured';
                 this.dellStatusElement.className = 'status not-configured';
+                this.dellStatusElement.title = 'No Dell API key configured';
             }
         }
     }
@@ -873,16 +875,33 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     throw new Error('API key appears to be too short. Please check your Dell API key.');
                 }
 
-                // Test the API key with a real validation call
-                this.showMessage('🔍 Testing Dell API key...', 'info');
-                const isValid = await this.validateDellApiKey(dellApiKey);
+                // Basic validation first
+                localStorage.setItem('dell_api_key', dellApiKey);
+                this.updateApiStatus();
 
-                if (isValid) {
-                    localStorage.setItem('dell_api_key', dellApiKey);
-                    this.updateApiStatus();
-                    this.showSuccess('✅ Dell API key validated and saved successfully! You can now process Dell devices.');
-                } else {
-                    throw new Error('Dell API key validation failed. Please check your API key and try again.');
+                // Attempt API validation (will fail due to CORS in browser)
+                try {
+                    this.showMessage('🔍 Testing Dell API key...', 'info');
+                    const isValid = await this.validateDellApiKey(dellApiKey);
+
+                    if (isValid) {
+                        this.showSuccess('✅ Dell API key validated and saved successfully! You can now process Dell devices.');
+                    } else {
+                        // Remove the key if validation explicitly failed (401 response)
+                        localStorage.removeItem('dell_api_key');
+                        this.updateApiStatus();
+                        throw new Error('Dell API key validation failed. Please check your API key and try again.');
+                    }
+                } catch (error) {
+                    // Handle CORS and other validation errors
+                    if (error.message.includes('CORS policy')) {
+                        this.showMessage('⚠️ Dell API key saved but cannot be validated from browser due to CORS policy. The key will be tested during actual warranty processing.', 'info');
+                    } else {
+                        // Remove the key and show the error
+                        localStorage.removeItem('dell_api_key');
+                        this.updateApiStatus();
+                        throw error;
+                    }
                 }
             } else {
                 localStorage.removeItem('dell_api_key');
@@ -905,7 +924,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Validate Dell API key by making a test call
+     * Validate Dell API key - Note: Browser CORS limitations prevent direct validation
      */
     async validateDellApiKey(apiKey) {
         try {
@@ -933,9 +952,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         } catch (error) {
             console.error('API validation error:', error);
-            // Network errors or CORS issues - assume key might be valid
-            // We'll let the user proceed and catch issues during actual processing
-            return true;
+
+            // Check if this is a CORS error (common in browsers)
+            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                // This is likely a CORS error - we can't validate from browser
+                console.warn('CORS prevents API validation from browser. API key will be validated during actual processing.');
+                throw new Error('Cannot validate API key from browser due to CORS policy. The key will be tested during actual warranty processing.');
+            }
+
+            // Other network errors
+            throw new Error(`Network error during API validation: ${error.message}`);
         }
     }
 

@@ -141,6 +141,12 @@ class DellAPI {
 
         } catch (error) {
             console.error('Dell API Error:', error);
+
+            // Handle CORS errors specifically
+            if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                throw new Error('Dell API blocked by CORS policy. This is a browser limitation. Consider using a proxy server or backend service for production use.');
+            }
+
             throw error;
         }
     }
