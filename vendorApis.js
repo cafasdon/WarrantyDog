@@ -143,6 +143,17 @@ class DellAPI {
             console.log('Dell API Response Headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+
+                // Handle rate limiting specifically
+                if (response.status === 429) {
+                    const rateLimitError = new Error(`Rate limit exceeded: ${errorData.message || 'Too many requests'}`);
+                    rateLimitError.isRateLimit = true;
+                    rateLimitError.retryAfter = errorData.retryAfterSeconds || 60;
+                    rateLimitError.originalError = errorData;
+                    throw rateLimitError;
+                }
+
                 const errorMessage = await this.handleErrorResponse(response);
                 console.error('Dell API Error Response:', errorMessage);
                 throw new Error(errorMessage);
@@ -346,12 +357,13 @@ class WarrantyLookupService {
     }
 
     /**
-     * Lookup warranty for a device
+     * Lookup warranty for a device with retry logic
      * @param {string} vendor - Vendor name (dell, lenovo, hp)
      * @param {string} identifier - Service tag or serial number
+     * @param {number} retryCount - Current retry attempt (internal use)
      * @returns {Promise<Object>} Warranty information
      */
-    async lookupWarranty(vendor, identifier) {
+    async lookupWarranty(vendor, identifier, retryCount = 0) {
         const vendorLower = vendor.toLowerCase();
 
         if (!VendorAPIFactory.isVendorSupported(vendorLower)) {
@@ -366,8 +378,72 @@ class WarrantyLookupService {
             return await this.apis[vendorLower].lookupWarranty(identifier);
         } catch (error) {
             console.error(`Warranty lookup failed for ${vendor} ${identifier}:`, error);
+
+            // Handle rate limiting with retry logic
+            if (this.isRateLimitError(error) && retryCount < 3) {
+                const retryAfter = this.extractRetryAfter(error);
+                console.log(`Rate limit hit for ${identifier}, retrying in ${retryAfter} seconds... (attempt ${retryCount + 1}/3)`);
+
+                await this.waitForRetry(retryAfter);
+                return await this.lookupWarranty(vendor, identifier, retryCount + 1);
+            }
+
+            // Handle other retryable errors with exponential backoff
+            if (this.isRetryableError(error) && retryCount < 2) {
+                const backoffTime = Math.pow(2, retryCount) * 1000; // 1s, 2s exponential backoff
+                console.log(`Retryable error for ${identifier}, retrying in ${backoffTime}ms... (attempt ${retryCount + 1}/2)`);
+
+                await this.waitForRetry(backoffTime / 1000);
+                return await this.lookupWarranty(vendor, identifier, retryCount + 1);
+            }
+
             throw error;
         }
+    }
+
+    /**
+     * Check if error is due to rate limiting
+     */
+    isRateLimitError(error) {
+        return error.message && (
+            error.message.includes('rate_limit_exceeded') ||
+            error.message.includes('429') ||
+            error.message.includes('Too Many Requests')
+        );
+    }
+
+    /**
+     * Check if error is retryable (network issues, temporary server errors)
+     */
+    isRetryableError(error) {
+        return error.message && (
+            error.message.includes('500') ||
+            error.message.includes('502') ||
+            error.message.includes('503') ||
+            error.message.includes('504') ||
+            error.message.includes('network') ||
+            error.message.includes('timeout')
+        );
+    }
+
+    /**
+     * Extract retry-after time from error
+     */
+    extractRetryAfter(error) {
+        // Try to extract from error message or default to 60 seconds
+        if (error.retryAfter) {
+            return parseInt(error.retryAfter);
+        }
+
+        const match = error.message.match(/retry.*?(\d+)/i);
+        return match ? parseInt(match[1]) : 60;
+    }
+
+    /**
+     * Wait for specified number of seconds
+     */
+    async waitForRetry(seconds) {
+        return new Promise(resolve => setTimeout(resolve, seconds * 1000));
     }
 
     /**

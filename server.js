@@ -75,10 +75,43 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
             }
         });
 
+        console.log(`Dell API Response Status: ${warrantyResponse.status}`);
+
+        // Handle rate limiting (429 Too Many Requests)
+        if (warrantyResponse.status === 429) {
+            const retryAfter = warrantyResponse.headers.get('retry-after') ||
+                              warrantyResponse.headers.get('x-ratelimit-reset') ||
+                              warrantyResponse.headers.get('x-rate-limit-reset');
+
+            const rateLimitInfo = {
+                error: 'rate_limit_exceeded',
+                message: 'Dell API rate limit exceeded',
+                retryAfter: retryAfter,
+                retryAfterSeconds: retryAfter ? parseInt(retryAfter) : 60, // Default to 60 seconds
+                timestamp: new Date().toISOString(),
+                serviceTag: serviceTag
+            };
+
+            console.log(`Rate limit exceeded for ${serviceTag}. Retry after: ${retryAfter || '60'} seconds`);
+            return res.status(429).json(rateLimitInfo);
+        }
+
         const warrantyData = await warrantyResponse.json();
 
+        // Enhanced response with rate limit headers if available
+        const responseData = {
+            ...warrantyData,
+            _metadata: {
+                status: warrantyResponse.status,
+                timestamp: new Date().toISOString(),
+                serviceTag: serviceTag,
+                rateLimitRemaining: warrantyResponse.headers.get('x-ratelimit-remaining'),
+                rateLimitReset: warrantyResponse.headers.get('x-ratelimit-reset')
+            }
+        };
+
         // Return the response with proper status
-        res.status(warrantyResponse.status).json(warrantyData);
+        res.status(warrantyResponse.status).json(responseData);
 
     } catch (error) {
         console.error('Dell API proxy error:', error);
