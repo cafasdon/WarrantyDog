@@ -5,13 +5,17 @@
  * Currently supports Dell with plans for Lenovo and HP integration.
  *
  * Features:
- * - Rate limiting to respect API quotas
- * - Error handling and retry logic
+ * - Intelligent adaptive rate limiting with machine learning
+ * - Dynamic burst handling and concurrent processing
+ * - Circuit breaker patterns for error recovery
+ * - Comprehensive analytics and optimization
  * - API key management via localStorage
  * - Standardized response format across vendors
  */
 
-// Rate limiting configuration
+import IntelligentRateLimitingSystem from './intelligentRateLimitingSystem.js';
+
+// Legacy rate limiting configuration (now used as fallback/initial values)
 const RATE_LIMITS = {
     dell: {
         requestsPerMinute: 60,
@@ -27,7 +31,32 @@ const RATE_LIMITS = {
     }
 };
 
-// Rate limiter class to manage API call frequency
+// Initialize intelligent rate limiting systems for each vendor
+const intelligentRateLimiters = {
+    dell: new IntelligentRateLimitingSystem('dell', {
+        mode: 'adaptive',
+        rateLimiter: {
+            requestsPerMinute: RATE_LIMITS.dell.requestsPerMinute,
+            requestsPerHour: RATE_LIMITS.dell.requestsPerHour
+        }
+    }),
+    lenovo: new IntelligentRateLimitingSystem('lenovo', {
+        mode: 'adaptive',
+        rateLimiter: {
+            requestsPerMinute: RATE_LIMITS.lenovo.requestsPerMinute,
+            requestsPerHour: RATE_LIMITS.lenovo.requestsPerHour
+        }
+    }),
+    hp: new IntelligentRateLimitingSystem('hp', {
+        mode: 'adaptive',
+        rateLimiter: {
+            requestsPerMinute: RATE_LIMITS.hp.requestsPerMinute,
+            requestsPerHour: RATE_LIMITS.hp.requestsPerHour
+        }
+    })
+};
+
+// Legacy RateLimiter class (kept for backward compatibility)
 class RateLimiter {
     constructor(vendor) {
         this.vendor = vendor;
@@ -66,7 +95,7 @@ class RateLimiter {
     }
 }
 
-// Initialize rate limiters for each vendor
+// Legacy rate limiters (kept for backward compatibility)
 const rateLimiters = {
     dell: new RateLimiter('dell'),
     lenovo: new RateLimiter('lenovo'),
@@ -80,7 +109,9 @@ const rateLimiters = {
 class DellAPI {
     constructor() {
         this.baseUrl = 'https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5';
-        this.rateLimiter = rateLimiters.dell;
+        this.rateLimiter = rateLimiters.dell; // Legacy rate limiter
+        this.intelligentRateLimiter = intelligentRateLimiters.dell; // New intelligent system
+        this.useIntelligentRateLimiting = true; // Enable intelligent rate limiting by default
     }
 
     /**
@@ -111,57 +142,82 @@ class DellAPI {
      * @returns {Promise<Object>} Warranty information
      */
     async lookupWarranty(serviceTag) {
+        console.log(`Looking up Dell warranty for service tag: ${serviceTag}`);
+
+        // Use intelligent rate limiting system if enabled
+        if (this.useIntelligentRateLimiting) {
+            return await this.intelligentRateLimiter.executeRequest(
+                () => this.performWarrantyLookup(serviceTag),
+                { serviceTag, vendor: 'dell' }
+            );
+        } else {
+            // Fallback to legacy rate limiting
+            return await this.performWarrantyLookupLegacy(serviceTag);
+        }
+    }
+
+    /**
+     * Perform warranty lookup with intelligent rate limiting
+     */
+    async performWarrantyLookup(serviceTag) {
+        const apiKey = this.getApiKey();
+        const apiSecret = this.getApiSecret();
+
+        // Use backend proxy to avoid CORS issues
+        const proxyUrl = `/api/dell/warranty/${serviceTag}`;
+
+        console.log('Dell API Request via proxy:', proxyUrl);
+        console.log('API Key length:', apiKey.length);
+        console.log('API Secret length:', apiSecret.length);
+
+        const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+                'X-Dell-Api-Key': apiKey,
+                'X-Dell-Api-Secret': apiSecret,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Dell API Response Status:', response.status);
+        console.log('Dell API Response Headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+
+            // Handle rate limiting specifically
+            if (response.status === 429) {
+                const rateLimitError = new Error(`rate_limit_exceeded: ${errorData.message || 'Too many requests'}`);
+                rateLimitError.isRateLimit = true;
+                rateLimitError.retryAfter = errorData.retryAfterSeconds || 60;
+                rateLimitError.originalError = errorData;
+                throw rateLimitError;
+            }
+
+            const errorMessage = await this.handleErrorResponse(response);
+            console.error('Dell API Error Response:', errorMessage);
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        console.log('Dell API Response Data:', data);
+        return this.parseWarrantyResponse(data, serviceTag);
+    }
+
+    /**
+     * Legacy warranty lookup method (for backward compatibility)
+     */
+    async performWarrantyLookupLegacy(serviceTag) {
         if (!this.rateLimiter.canMakeRequest()) {
             const waitTime = this.rateLimiter.getWaitTime();
             throw new Error(`Rate limit exceeded. Please wait ${Math.ceil(waitTime / 1000)} seconds.`);
         }
 
         try {
-            const apiKey = this.getApiKey();
-            const apiSecret = this.getApiSecret();
-
-            // Use backend proxy to avoid CORS issues
-            const proxyUrl = `/api/dell/warranty/${serviceTag}`;
-
-            console.log('Dell API Request via proxy:', proxyUrl);
-            console.log('API Key length:', apiKey.length);
-            console.log('API Secret length:', apiSecret.length);
-
-            const response = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: {
-                    'X-Dell-Api-Key': apiKey,
-                    'X-Dell-Api-Secret': apiSecret,
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-            });
-
+            const result = await this.performWarrantyLookup(serviceTag);
             this.rateLimiter.recordRequest();
-
-            console.log('Dell API Response Status:', response.status);
-            console.log('Dell API Response Headers:', Object.fromEntries(response.headers.entries()));
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-
-                // Handle rate limiting specifically
-                if (response.status === 429) {
-                    const rateLimitError = new Error(`Rate limit exceeded: ${errorData.message || 'Too many requests'}`);
-                    rateLimitError.isRateLimit = true;
-                    rateLimitError.retryAfter = errorData.retryAfterSeconds || 60;
-                    rateLimitError.originalError = errorData;
-                    throw rateLimitError;
-                }
-
-                const errorMessage = await this.handleErrorResponse(response);
-                console.error('Dell API Error Response:', errorMessage);
-                throw new Error(errorMessage);
-            }
-
-            const data = await response.json();
-            console.log('Dell API Response Data:', data);
-            return this.parseWarrantyResponse(data, serviceTag);
+            return result;
 
         } catch (error) {
             console.error('Dell API Error:', error);
@@ -447,12 +503,37 @@ class WarrantyLookupService {
     }
 
     /**
-     * Get rate limit status for a vendor
+     * Get rate limit status for a vendor (enhanced with intelligent rate limiting)
      */
     getRateLimitStatus(vendor) {
         const vendorLower = vendor.toLowerCase();
-        const rateLimiter = rateLimiters[vendorLower];
 
+        // Try intelligent rate limiter first
+        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+        if (intelligentRateLimiter) {
+            const status = intelligentRateLimiter.getSystemStatus();
+            return {
+                // Legacy compatibility
+                canMakeRequest: status.rateLimiter.canMakeRequest,
+                waitTime: status.rateLimiter.optimalDelayMs,
+                requestsInLastMinute: status.rateLimiter.requestsInLastMinute,
+                requestsInLastHour: status.rateLimiter.requestsInLastHour,
+
+                // Enhanced information
+                intelligentStatus: {
+                    mode: status.currentMode,
+                    circuitState: status.errorRecovery.circuitState,
+                    burstMode: status.burstManager.isInBurst,
+                    concurrency: status.concurrentProcessor.currentConcurrency,
+                    successRate: status.analytics.currentPerformance?.successRate || 1.0,
+                    averageResponseTime: status.analytics.currentPerformance?.averageResponseTime || 0,
+                    recommendations: status.analytics.latestRecommendations?.length || 0
+                }
+            };
+        }
+
+        // Fallback to legacy rate limiter
+        const rateLimiter = rateLimiters[vendorLower];
         if (!rateLimiter) {
             return null;
         }
@@ -467,6 +548,51 @@ class WarrantyLookupService {
                 time => time > Date.now() - 3600000
             ).length
         };
+    }
+
+    /**
+     * Get comprehensive analytics dashboard for a vendor
+     */
+    getAnalyticsDashboard(vendor) {
+        const vendorLower = vendor.toLowerCase();
+        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+
+        if (intelligentRateLimiter) {
+            return intelligentRateLimiter.analytics.getDashboardData();
+        }
+
+        return null;
+    }
+
+    /**
+     * Set rate limiting mode for a vendor
+     */
+    setRateLimitingMode(vendor, mode) {
+        const vendorLower = vendor.toLowerCase();
+        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+
+        if (intelligentRateLimiter) {
+            intelligentRateLimiter.setMode(mode);
+            console.log(`[${vendor}] Rate limiting mode set to: ${mode}`);
+        }
+    }
+
+    /**
+     * Process multiple devices with intelligent concurrent processing
+     */
+    async processDevicesBatch(vendor, devices, processingOptions = {}) {
+        const vendorLower = vendor.toLowerCase();
+        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+
+        if (!intelligentRateLimiter) {
+            throw new Error(`Intelligent rate limiter not available for vendor: ${vendor}`);
+        }
+
+        const processingFunction = async (device) => {
+            return await this.lookupWarranty(vendor, device.serialNumber || device.serviceTag);
+        };
+
+        return await intelligentRateLimiter.processDevices(devices, processingFunction, processingOptions);
     }
 }
 
