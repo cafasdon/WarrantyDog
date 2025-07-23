@@ -857,6 +857,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         // Wait for all vendors to complete
         const vendorResults = await Promise.all(vendorPromises);
 
+        // Initialize progress tracking for concurrent processing
+        this.concurrentProgress = {
+            total: total,
+            processed: 0,
+            successful: 0,
+            failed: 0,
+            skipped: 0,
+            cached: 0
+        };
+
         // Combine all results and update final statistics
         let totalSuccessful = 0;
         let totalFailed = 0;
@@ -1366,6 +1376,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             // Find the device in the original list to get its index
             const allDevices = this.getValidDevicesFromCsv();
+            console.log(`📊 Total devices in list: ${allDevices.length}`);
+
             const deviceIndex = allDevices.findIndex(d =>
                 d.serialNumber === device.serialNumber && d.vendor === device.vendor
             );
@@ -1374,6 +1386,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             if (deviceIndex === -1) {
                 console.warn(`❌ Device not found in list: ${device.serialNumber}`);
+                console.log(`🔍 Looking for: vendor=${device.vendor}, serial=${device.serialNumber}`);
+                console.log(`🔍 First few devices:`, allDevices.slice(0, 3).map(d => ({vendor: d.vendor, serial: d.serialNumber})));
                 return;
             }
 
@@ -1381,6 +1395,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             if (!row) {
                 console.warn(`❌ Row not found for device index: ${deviceIndex}`);
                 console.log(`📊 Available rows:`, this.resultsTable.querySelectorAll('tbody tr').length);
+                console.log(`🔍 Looking for selector: tbody tr[data-device-index="${deviceIndex}"]`);
+
+                // Check if any rows have data-device-index attributes
+                const allRows = this.resultsTable.querySelectorAll('tbody tr');
+                console.log(`🔍 Sample row attributes:`, allRows.length > 0 ? allRows[0].dataset : 'No rows found');
                 return;
             }
 
@@ -1412,6 +1431,33 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     row.querySelector('.warranty-days').textContent = 'N/A';
                     row.classList.add('skipped');
                     break;
+            }
+
+            // Update progress counters
+            if (this.concurrentProgress) {
+                this.concurrentProgress.processed++;
+
+                switch (status) {
+                    case 'success':
+                        this.concurrentProgress.successful++;
+                        break;
+                    case 'error':
+                        this.concurrentProgress.failed++;
+                        break;
+                    case 'skipped':
+                        this.concurrentProgress.skipped++;
+                        break;
+                }
+
+                // Update progress display
+                this.updateProgress(
+                    this.concurrentProgress.processed,
+                    this.concurrentProgress.total,
+                    this.concurrentProgress.successful,
+                    this.concurrentProgress.failed,
+                    this.concurrentProgress.skipped,
+                    device
+                );
             }
 
             // Show live update notification
