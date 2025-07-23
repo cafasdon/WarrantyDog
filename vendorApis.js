@@ -378,6 +378,7 @@ class DellAPI {
             console.log(`[DEBUG] Processing device for ${serviceTag}:`, device);
 
             const entitlements = device.entitlements || [];
+            console.log(`[DEBUG] Entitlements for ${serviceTag}:`, entitlements.length, entitlements);
 
             // Find the primary warranty (usually the longest or most comprehensive)
             const primaryWarranty = entitlements.reduce((primary, current) => {
@@ -389,12 +390,17 @@ class DellAPI {
                 return currentEnd > primaryEnd ? current : primary;
             }, null);
 
+            console.log(`[DEBUG] Primary warranty for ${serviceTag}:`, primaryWarranty);
+
             if (!primaryWarranty) {
+                console.log(`[DEBUG] No primary warranty found for ${serviceTag}, entitlements:`, entitlements);
                 return {
                     serviceTag: serviceTag,
                     vendor: 'Dell',
                     status: 'no_warranty',
-                    message: 'No active warranty found'
+                    message: 'No warranty entitlements found',
+                    model: device.productLineDescription || 'Unknown Model',
+                    shipDate: device.shipDate ? new Date(device.shipDate).toISOString().split('T')[0] : null
                 };
             }
 
@@ -404,6 +410,9 @@ class DellAPI {
 
             const isActive = now >= startDate && now <= endDate;
             const daysRemaining = isActive ? Math.ceil((endDate - now) / (1000 * 60 * 60 * 24)) : 0;
+            const daysExpired = !isActive && now > endDate ? Math.ceil((now - endDate) / (1000 * 60 * 60 * 24)) : 0;
+
+            console.log(`[DEBUG] Warranty dates for ${serviceTag}: start=${startDate.toISOString()}, end=${endDate.toISOString()}, now=${now.toISOString()}, active=${isActive}, daysRemaining=${daysRemaining}, daysExpired=${daysExpired}`);
 
             return {
                 serviceTag: serviceTag,
@@ -413,13 +422,18 @@ class DellAPI {
                 startDate: startDate.toISOString().split('T')[0],
                 endDate: endDate.toISOString().split('T')[0],
                 daysRemaining: daysRemaining,
+                daysExpired: daysExpired,
                 isActive: isActive,
                 model: device.productLineDescription || 'Unknown Model',
                 shipDate: device.shipDate ? new Date(device.shipDate).toISOString().split('T')[0] : null,
+                message: isActive ?
+                    `Active warranty - ${daysRemaining} days remaining` :
+                    `Warranty expired ${daysExpired} days ago`,
                 allEntitlements: entitlements.map(ent => ({
                     type: ent.serviceLevelDescription,
                     startDate: ent.startDate,
-                    endDate: ent.endDate
+                    endDate: ent.endDate,
+                    entitlementType: ent.entitlementType
                 }))
             };
 
