@@ -958,6 +958,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 this.showSessionCompletedState();
             } catch (error) {
                 console.error('Error completing session:', error);
+                // Still show completion state even if session update fails
+                try {
+                    this.showSessionCompletedState();
+                } catch (uiError) {
+                    console.error('Error showing completion state:', uiError);
+                }
             }
         }
 
@@ -1065,25 +1071,34 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Show session completed state with persistent results
      */
     showSessionCompletedState() {
-        // Update process button to show completion
-        this.processBtn.textContent = '✅ Processing Complete';
-        this.processBtn.disabled = true;
-        this.processBtn.style.background = '#28a745';
-        this.processBtn.style.color = 'white';
+        try {
+            // Update process button to show completion
+            if (this.processBtn) {
+                this.processBtn.textContent = '✅ Processing Complete';
+                this.processBtn.disabled = true;
+                this.processBtn.style.background = '#28a745';
+                this.processBtn.style.color = 'white';
+            }
 
-        // Show clear session button for manual cleanup
-        if (this.clearSessionBtn) {
-            this.clearSessionBtn.style.display = 'inline-block';
-            this.clearSessionBtn.textContent = '🗑️ Clear Results';
+            // Show clear session button for manual cleanup
+            if (this.clearSessionBtn) {
+                this.clearSessionBtn.style.display = 'inline-block';
+                this.clearSessionBtn.textContent = '🗑️ Clear Results';
+            }
+
+            // Add completion timestamp to results
+            this.addCompletionTimestamp();
+
+            // Keep results table visible and scrollable
+            if (this.resultsContainer) {
+                this.resultsContainer.style.display = 'block';
+            }
+
+            console.log('Session completed - results remain visible for review');
+        } catch (error) {
+            console.error('Error showing session completed state:', error);
+            // Continue execution despite UI error
         }
-
-        // Add completion timestamp to results
-        this.addCompletionTimestamp();
-
-        // Keep results table visible and scrollable
-        this.resultsContainer.style.display = 'block';
-
-        console.log('Session completed - results remain visible for review');
     }
 
     /**
@@ -1106,7 +1121,23 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 margin: 10px 0;
                 font-weight: bold;
             `;
-            this.resultsContainer.insertBefore(completionInfo, this.resultsTable);
+
+            // Safely insert the completion info
+            if (this.resultsContainer && this.resultsTable) {
+                // Check if resultsTable is actually a child of resultsContainer
+                if (this.resultsContainer.contains(this.resultsTable)) {
+                    this.resultsContainer.insertBefore(completionInfo, this.resultsTable);
+                } else {
+                    // Fallback: prepend to results container
+                    this.resultsContainer.prepend(completionInfo);
+                }
+            } else if (this.resultsContainer) {
+                // Fallback: append to results container
+                this.resultsContainer.prepend(completionInfo);
+            } else {
+                // Last resort: append to document body
+                document.body.appendChild(completionInfo);
+            }
         }
 
         completionInfo.innerHTML = `
