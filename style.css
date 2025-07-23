@@ -530,6 +530,12 @@ th {
     transform-origin: center;
 }
 
+.results-table tbody tr.recently-updated {
+    animation: recentUpdate 2s ease-out;
+    border-left: 4px solid #17a2b8;
+    background: linear-gradient(90deg, #d1ecf1 0%, #ffffff 100%);
+}
+
 .results-table tbody tr.warranty-success {
     background-color: #d4edda;
     border-left: 4px solid #28a745;
@@ -620,6 +626,21 @@ th {
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+@keyframes recentUpdate {
+    0% {
+        background: linear-gradient(90deg, #d1ecf1 0%, #ffffff 100%);
+        border-left-color: #17a2b8;
+    }
+    50% {
+        background: linear-gradient(90deg, #bee5eb 0%, #f8f9fa 100%);
+        border-left-color: #138496;
+    }
+    100% {
+        background: transparent;
+        border-left-color: transparent;
+    }
 }
 
 @keyframes successPulse {

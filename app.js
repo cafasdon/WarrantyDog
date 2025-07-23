@@ -1023,9 +1023,6 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 // Update status to processing with enhanced visual feedback
                 row.querySelector('.warranty-status').innerHTML = '🔄 Processing...';
                 row.classList.add('processing');
-
-                // Scroll to current row to keep it visible
-                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
             try {
@@ -1201,9 +1198,6 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 row.classList.remove('warranty-error');
             }, 2000);
         }
-
-        // Scroll to keep the updated row visible (smooth scrolling)
-        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
         // Add a subtle flash animation
         row.style.transition = 'all 0.3s ease';
@@ -1399,6 +1393,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             switch (status) {
                 case 'success':
                     this.updateRowWithWarrantyData(row, result);
+                    // Add subtle success indicator without scrolling
+                    row.classList.add('recently-updated');
+                    setTimeout(() => row.classList.remove('recently-updated'), 3000);
                     break;
                 case 'error':
                     row.querySelector('.warranty-status').innerHTML = '❌ Error';
