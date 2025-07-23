@@ -688,6 +688,138 @@ class DatabaseService {
         return await this.migrationManager.runMigrations();
     }
 
+    // ==================== API RESPONSE CACHING METHODS ====================
+
+    /**
+     * Store raw API response for caching and reprocessing
+     */
+    storeApiResponse(vendor, serviceTag, requestData, responseData) {
+        const stmt = this.db.prepare(`
+            INSERT OR REPLACE INTO api_responses (
+                vendor, service_tag, request_url, request_method, request_headers, request_body,
+                response_status, response_headers, response_body, response_timestamp,
+                parsing_status, is_valid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        `);
+
+        const isValid = responseData.status >= 200 && responseData.status < 300;
+
+        return stmt.run(
+            vendor.toLowerCase(),
+            serviceTag.toUpperCase(),
+            requestData.url || '',
+            requestData.method || 'GET',
+            JSON.stringify(requestData.headers || {}),
+            requestData.body ? JSON.stringify(requestData.body) : null,
+            responseData.status,
+            JSON.stringify(responseData.headers || {}),
+            JSON.stringify(responseData.body),
+            new Date().toISOString(),
+            isValid ? 1 : 0
+        );
+    }
+
+    /**
+     * Get cached API response
+     */
+    getCachedApiResponse(vendor, serviceTag, maxAgeHours = 24) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM api_responses
+            WHERE vendor = ? AND service_tag = ? AND is_valid = 1
+            AND datetime(response_timestamp) > datetime('now', '-' || ? || ' hours')
+            ORDER BY response_timestamp DESC
+            LIMIT 1
+        `);
+
+        return stmt.get(vendor.toLowerCase(), serviceTag.toUpperCase(), maxAgeHours);
+    }
+
+    /**
+     * Update parsing status and results for an API response
+     */
+    updateApiResponseParsing(responseId, status, parsedData = null, error = null) {
+        const stmt = this.db.prepare(`
+            UPDATE api_responses
+            SET parsing_status = ?, parsed_data = ?, parsing_error = ?,
+                parsing_attempts = parsing_attempts + 1, last_parsed_at = ?,
+                updated_at = ?
+            WHERE id = ?
+        `);
+
+        return stmt.run(
+            status,
+            parsedData ? JSON.stringify(parsedData) : null,
+            error,
+            new Date().toISOString(),
+            new Date().toISOString(),
+            responseId
+        );
+    }
+
+    /**
+     * Get all failed parsing responses for reprocessing
+     */
+    getFailedParsingResponses(vendor = null, limit = 100) {
+        let query = `
+            SELECT * FROM api_responses
+            WHERE parsing_status = 'failed' AND is_valid = 1
+        `;
+        const params = [];
+
+        if (vendor) {
+            query += ` AND vendor = ?`;
+            params.push(vendor.toLowerCase());
+        }
+
+        query += ` ORDER BY response_timestamp DESC LIMIT ?`;
+        params.push(limit);
+
+        const stmt = this.db.prepare(query);
+        return stmt.all(...params);
+    }
+
+    /**
+     * Get API response statistics
+     */
+    getApiResponseStats(vendor = null, hours = 24) {
+        let query = `
+            SELECT
+                vendor,
+                COUNT(*) as total_responses,
+                COUNT(CASE WHEN parsing_status = 'success' THEN 1 END) as successful_parsing,
+                COUNT(CASE WHEN parsing_status = 'failed' THEN 1 END) as failed_parsing,
+                COUNT(CASE WHEN parsing_status = 'pending' THEN 1 END) as pending_parsing,
+                AVG(response_status) as avg_response_status,
+                MIN(response_timestamp) as earliest_response,
+                MAX(response_timestamp) as latest_response
+            FROM api_responses
+            WHERE datetime(response_timestamp) > datetime('now', '-' || ? || ' hours')
+        `;
+        const params = [hours];
+
+        if (vendor) {
+            query += ` AND vendor = ?`;
+            params.push(vendor.toLowerCase());
+        }
+
+        query += ` GROUP BY vendor`;
+
+        const stmt = this.db.prepare(query);
+        return stmt.all(...params);
+    }
+
+    /**
+     * Clean old API responses
+     */
+    cleanOldApiResponses(retentionDays = 30) {
+        const stmt = this.db.prepare(`
+            DELETE FROM api_responses
+            WHERE datetime(response_timestamp) < datetime('now', '-' || ? || ' days')
+        `);
+
+        return stmt.run(retentionDays);
+    }
+
     /**
      * Close database connection
      */

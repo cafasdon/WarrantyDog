@@ -104,6 +104,32 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
 
         const warrantyData = await warrantyResponse.json();
 
+        // Store raw API response in database for caching and reprocessing
+        let responseId = null;
+        try {
+            const requestData = {
+                url: warrantyUrl,
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer [REDACTED]',
+                    'Accept': 'application/json'
+                }
+            };
+
+            const responseDataForStorage = {
+                status: warrantyResponse.status,
+                headers: Object.fromEntries(warrantyResponse.headers.entries()),
+                body: warrantyData
+            };
+
+            const result = dbService.storeApiResponse('dell', serviceTag, requestData, responseDataForStorage);
+            responseId = result.lastInsertRowid;
+            console.log(`Stored API response for ${serviceTag} in database with ID: ${responseId}`);
+        } catch (storageError) {
+            console.error(`Failed to store API response for ${serviceTag}:`, storageError);
+            // Continue processing even if storage fails
+        }
+
         // Enhanced response with rate limit headers if available
         const responseData = {
             ...warrantyData,
@@ -111,6 +137,7 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
                 status: warrantyResponse.status,
                 timestamp: new Date().toISOString(),
                 serviceTag: serviceTag,
+                responseId: responseId, // Include response ID for tracking parsing status
                 rateLimitRemaining: warrantyResponse.headers.get('x-ratelimit-remaining'),
                 rateLimitReset: warrantyResponse.headers.get('x-ratelimit-reset')
             }
@@ -125,6 +152,100 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
             error: 'Internal server error',
             message: error.message
         });
+    }
+});
+
+// Update parsing status endpoint
+app.post('/api/parsing-status', (req, res) => {
+    try {
+        const { responseId, status, parsedData, error } = req.body;
+
+        if (!responseId || !status) {
+            return res.status(400).json({ error: 'responseId and status are required' });
+        }
+
+        const result = dbService.updateApiResponseParsing(responseId, status, parsedData, error);
+
+        res.status(200).json({
+            success: true,
+            message: 'Parsing status updated successfully',
+            changes: result.changes
+        });
+    } catch (error) {
+        console.error('Error updating parsing status:', error);
+        res.status(500).json({ error: 'Failed to update parsing status' });
+    }
+});
+
+// Get failed parsing responses for reprocessing
+app.get('/api/failed-parsing', (req, res) => {
+    try {
+        const { vendor, limit = 100 } = req.query;
+        const failedResponses = dbService.getFailedParsingResponses(vendor, parseInt(limit));
+
+        res.status(200).json({
+            success: true,
+            count: failedResponses.length,
+            responses: failedResponses
+        });
+    } catch (error) {
+        console.error('Error getting failed parsing responses:', error);
+        res.status(500).json({ error: 'Failed to get failed parsing responses' });
+    }
+});
+
+// Get API response statistics
+app.get('/api/response-stats', (req, res) => {
+    try {
+        const { vendor, hours = 24 } = req.query;
+        const stats = dbService.getApiResponseStats(vendor, parseInt(hours));
+
+        res.status(200).json({
+            success: true,
+            stats: stats
+        });
+    } catch (error) {
+        console.error('Error getting API response stats:', error);
+        res.status(500).json({ error: 'Failed to get API response stats' });
+    }
+});
+
+// Reprocess failed parsing responses
+app.post('/api/reprocess-parsing', (req, res) => {
+    try {
+        const { vendor, responseIds } = req.body;
+
+        // Get failed responses to reprocess
+        let responsesToReprocess;
+        if (responseIds && responseIds.length > 0) {
+            // Reprocess specific response IDs
+            responsesToReprocess = responseIds.map(id => {
+                const stmt = dbService.db.prepare('SELECT * FROM api_responses WHERE id = ?');
+                return stmt.get(id);
+            }).filter(Boolean);
+        } else {
+            // Reprocess all failed responses for vendor
+            responsesToReprocess = dbService.getFailedParsingResponses(vendor);
+        }
+
+        const results = {
+            total: responsesToReprocess.length,
+            success: 0,
+            failed: 0,
+            details: []
+        };
+
+        // TODO: Implement actual reprocessing logic here
+        // For now, just return the count of responses that would be reprocessed
+
+        res.status(200).json({
+            success: true,
+            message: `Found ${results.total} responses ready for reprocessing`,
+            results: results
+        });
+    } catch (error) {
+        console.error('Error reprocessing parsing responses:', error);
+        res.status(500).json({ error: 'Failed to reprocess parsing responses' });
     }
 });
 
