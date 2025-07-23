@@ -5,8 +5,8 @@
  * Supports Dell API with plans for Lenovo and HP integration.
  */
 
-import { WarrantyLookupService } from './vendorApis.js';
-import ConcurrentProcessor from './concurrentProcessor.js';
+import { WarrantyLookupService } from './vendorApis.js?v=20250723-1704';
+import ConcurrentProcessor from './concurrentProcessor.js?v=20250723-1704';
 
 /**
  * Main WarrantyChecker Application Class
