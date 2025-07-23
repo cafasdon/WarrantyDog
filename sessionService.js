@@ -52,30 +52,69 @@ class SessionService {
     }
 
     /**
-     * Check for duplicates before creating session
+     * Check for duplicates before creating session (with chunking for large datasets)
      */
     async checkDuplicates(devices, maxAgeHours = 24) {
         try {
-            const response = await fetch(`${this.baseUrl}/api/sessions/check-duplicates`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    devices,
-                    maxAgeHours
-                })
-            });
+            // For large datasets, process in chunks to avoid payload size limits
+            const chunkSize = 100; // Process 100 devices at a time
 
-            if (!response.ok) {
-                throw new Error(`Failed to check duplicates: ${response.statusText}`);
+            if (devices.length <= chunkSize) {
+                // Small dataset - process normally
+                return await this.checkDuplicatesChunk(devices, maxAgeHours);
             }
 
-            return await response.json();
+            // Large dataset - process in chunks
+            console.log(`Processing ${devices.length} devices in chunks of ${chunkSize}...`);
+
+            let totalDuplicates = 0;
+            let totalFresh = 0;
+            let allDuplicateDetails = [];
+
+            for (let i = 0; i < devices.length; i += chunkSize) {
+                const chunk = devices.slice(i, i + chunkSize);
+                console.log(`Checking duplicates for chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(devices.length/chunkSize)}...`);
+
+                const chunkResult = await this.checkDuplicatesChunk(chunk, maxAgeHours);
+
+                totalDuplicates += chunkResult.duplicates;
+                totalFresh += chunkResult.fresh;
+                allDuplicateDetails.push(...chunkResult.duplicateDetails);
+            }
+
+            return {
+                total: devices.length,
+                duplicates: totalDuplicates,
+                fresh: totalFresh,
+                duplicateDetails: allDuplicateDetails
+            };
+
         } catch (error) {
             console.error('Error checking duplicates:', error);
             throw error;
         }
+    }
+
+    /**
+     * Check duplicates for a single chunk
+     */
+    async checkDuplicatesChunk(devices, maxAgeHours = 24) {
+        const response = await fetch(`${this.baseUrl}/api/sessions/check-duplicates`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                devices,
+                maxAgeHours
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to check duplicates: ${response.statusText}`);
+        }
+
+        return await response.json();
     }
 
     /**
