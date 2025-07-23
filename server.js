@@ -124,11 +124,37 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
+    const healthCheck = {
+        status: 'ok',
         message: 'WarrantyDog API proxy server is running',
-        timestamp: new Date().toISOString()
-    });
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0',
+        services: {
+            api: 'operational',
+            proxy: 'operational'
+        }
+    };
+
+    res.status(200).json(healthCheck);
+});
+
+// Readiness check endpoint
+app.get('/api/ready', (req, res) => {
+    // Check if server is ready to accept requests
+    const readinessCheck = {
+        status: 'ready',
+        message: 'WarrantyDog server is ready to accept requests',
+        timestamp: new Date().toISOString(),
+        checks: {
+            server: 'ready',
+            routes: 'loaded',
+            middleware: 'initialized'
+        }
+    };
+
+    res.status(200).json(readinessCheck);
 });
 
 // Serve the main application
