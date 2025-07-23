@@ -510,17 +510,75 @@ th {
 
 /* Live Processing Animations */
 .results-table tbody tr.processing {
-    background-color: #fff3cd;
+    background: linear-gradient(90deg, #fff3cd 25%, #ffeaa7 50%, #fff3cd 75%);
+    background-size: 200% 100%;
     border-left: 4px solid #ffc107;
-    animation: pulse 2s infinite;
+    animation: shimmer 1.5s infinite;
+    position: relative;
+}
+
+.results-table tbody tr.processing::before {
+    content: "🔄";
+    position: absolute;
+    left: -15px;
+    animation: spin 1s linear infinite;
 }
 
 .results-table tbody tr.data-updated {
-    animation: dataUpdate 1s ease-out;
+    animation: dataUpdate 0.8s ease-out;
+    border-left: 4px solid #28a745;
+    transform-origin: center;
 }
 
 .results-table tbody tr.warranty-success {
     background-color: #d4edda;
+    border-left: 4px solid #28a745;
+    animation: successPulse 1s ease-in-out;
+}
+
+.results-table tbody tr.warranty-error {
+    background-color: #f8d7da;
+    border-left: 4px solid #dc3545;
+    animation: errorPulse 1s ease-in-out;
+}
+
+/* Enhanced status indicators */
+.status-active {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.status-expired {
+    color: #fd7e14;
+    font-weight: bold;
+}
+
+.status-error {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Live update hover effects */
+.results-table tbody tr:hover {
+    background-color: #f8f9fa;
+    transition: background-color 0.2s ease;
+}
+
+/* Completion state styling */
+#completion-info {
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
     border-left: 4px solid #28a745;
 }
 
@@ -539,14 +597,50 @@ th {
     0% {
         transform: scale(1);
         box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        background-color: #c3e6cb;
     }
     50% {
         transform: scale(1.02);
         box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+        background-color: #d4edda;
     }
     100% {
         transform: scale(1);
         box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+        background-color: transparent;
+    }
+}
+
+/* Additional live update animations */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes successPulse {
+    0%, 100% {
+        background-color: #d4edda;
+        border-left-color: #28a745;
+    }
+    50% {
+        background-color: #c3e6cb;
+        border-left-color: #1e7e34;
+    }
+}
+
+@keyframes errorPulse {
+    0%, 100% {
+        background-color: #f8d7da;
+        border-left-color: #dc3545;
+    }
+    50% {
+        background-color: #f5c6cb;
+        border-left-color: #bd2130;
     }
 }
 
