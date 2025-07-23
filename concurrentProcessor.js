@@ -10,10 +10,10 @@ class ConcurrentProcessor {
     constructor(vendor, config = {}) {
         this.vendor = vendor;
         this.config = {
-            // Concurrency settings
-            maxConcurrency: config.maxConcurrency || 3,          // Maximum concurrent requests
-            minConcurrency: config.minConcurrency || 1,          // Minimum concurrent requests
-            initialConcurrency: config.initialConcurrency || 1,  // Starting concurrency
+            // Enhanced concurrency settings for cached responses
+            maxConcurrency: config.maxConcurrency || 8,          // Increased for better throughput with caching
+            minConcurrency: config.minConcurrency || 2,          // Higher minimum for efficiency
+            initialConcurrency: config.initialConcurrency || 4,  // Start with higher concurrency
             
             // Adaptive settings
             performanceThreshold: config.performanceThreshold || 0.9,  // Success rate threshold
@@ -38,14 +38,17 @@ class ConcurrentProcessor {
         this.activeRequests = new Map();
         this.requestQueue = [];
         
-        // Performance tracking
+        // Performance tracking with cache metrics
         this.metrics = {
             totalRequests: 0,
             successfulRequests: 0,
             failedRequests: 0,
             rateLimitHits: 0,
+            cacheHits: 0,
+            cacheMisses: 0,
             averageResponseTime: 1000,
-            throughput: 0
+            throughput: 0,
+            cacheHitRate: 0
         };
         
         // Adaptive state
@@ -60,7 +63,41 @@ class ConcurrentProcessor {
     }
 
     /**
-     * Start concurrent processing
+     * Check cache for existing warranty data
+     */
+    async checkCache(device) {
+        try {
+            const response = await fetch('/api/cached-warranty', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vendor: this.vendor,
+                    serviceTag: device.serialNumber,
+                    maxAgeHours: 24
+                })
+            });
+
+            if (response.ok) {
+                const cachedData = await response.json();
+                if (cachedData.found && cachedData.parsedData) {
+                    this.metrics.cacheHits++;
+                    return JSON.parse(cachedData.parsedData);
+                }
+            }
+
+            this.metrics.cacheMisses++;
+            return null;
+        } catch (error) {
+            console.error(`Cache check failed for ${device.serialNumber}:`, error);
+            this.metrics.cacheMisses++;
+            return null;
+        }
+    }
+
+    /**
+     * Start concurrent processing with cache integration
      */
     async startProcessing(devices, processingFunction) {
         if (this.isProcessing) {
@@ -70,9 +107,26 @@ class ConcurrentProcessor {
         this.isProcessing = true;
         this.isPaused = false;
         this.processingStartTime = Date.now();
-        
-        // Initialize queue with devices
-        this.requestQueue = devices.map((device, index) => ({
+
+        // Pre-filter devices through cache
+        console.log(`[${this.vendor}] Checking cache for ${devices.length} devices...`);
+        const uncachedDevices = [];
+        const cachedResults = new Map();
+
+        for (const device of devices) {
+            const cachedResult = await this.checkCache(device);
+            if (cachedResult) {
+                cachedResults.set(device.serialNumber, cachedResult);
+                console.log(`[${this.vendor}] Cache hit for ${device.serialNumber}`);
+            } else {
+                uncachedDevices.push(device);
+            }
+        }
+
+        console.log(`[${this.vendor}] Cache results: ${cachedResults.size} hits, ${uncachedDevices.length} misses`);
+
+        // Initialize queue with uncached devices only
+        this.requestQueue = uncachedDevices.map((device, index) => ({
             id: `device_${index}`,
             device,
             addedAt: Date.now(),
@@ -80,13 +134,28 @@ class ConcurrentProcessor {
             maxAttempts: 3
         }));
 
-        console.log(`[${this.vendor}] Starting concurrent processing: ${devices.length} devices, initial concurrency: ${this.currentConcurrency}`);
+        console.log(`[${this.vendor}] Starting concurrent processing: ${uncachedDevices.length} devices (${cachedResults.size} from cache), concurrency: ${this.currentConcurrency}`);
 
         try {
-            await this.processQueue(processingFunction);
+            // Process uncached devices
+            const apiResults = await this.processQueue(processingFunction);
+
+            // Combine cached and API results
+            const allResults = new Map([...cachedResults, ...apiResults]);
+            return allResults;
         } finally {
             this.isProcessing = false;
+            this.updateCacheMetrics();
         }
+    }
+
+    /**
+     * Update cache hit rate metrics
+     */
+    updateCacheMetrics() {
+        const totalCacheRequests = this.metrics.cacheHits + this.metrics.cacheMisses;
+        this.metrics.cacheHitRate = totalCacheRequests > 0 ?
+            (this.metrics.cacheHits / totalCacheRequests) * 100 : 0;
     }
 
     /**
@@ -94,10 +163,11 @@ class ConcurrentProcessor {
      */
     async processQueue(processingFunction) {
         const workers = [];
-        
+        const results = new Map();
+
         // Start initial workers
         for (let i = 0; i < this.currentConcurrency; i++) {
-            workers.push(this.createWorker(i, processingFunction));
+            workers.push(this.createWorker(i, processingFunction, results));
         }
 
         // Monitor and adapt concurrency
@@ -112,14 +182,15 @@ class ConcurrentProcessor {
         // Wait for all workers to complete
         await Promise.all(workers);
         clearInterval(adaptationInterval);
-        
+
         console.log(`[${this.vendor}] Concurrent processing completed`);
+        return results;
     }
 
     /**
      * Create a worker to process queue items
      */
-    async createWorker(workerId, processingFunction) {
+    async createWorker(workerId, processingFunction, results) {
         console.log(`[${this.vendor}] Worker ${workerId} started`);
         
         while (this.isProcessing && !this.isPaused) {
@@ -140,7 +211,7 @@ class ConcurrentProcessor {
             }
 
             // Process the item
-            await this.processQueueItem(queueItem, processingFunction);
+            await this.processQueueItem(queueItem, processingFunction, results);
         }
         
         console.log(`[${this.vendor}] Worker ${workerId} finished`);
@@ -163,10 +234,10 @@ class ConcurrentProcessor {
     /**
      * Process a single queue item
      */
-    async processQueueItem(queueItem, processingFunction) {
+    async processQueueItem(queueItem, processingFunction, results) {
         const requestId = `${queueItem.id}_${Date.now()}`;
         const startTime = Date.now();
-        
+
         // Track active request
         this.activeRequests.set(requestId, {
             queueItem,
@@ -177,6 +248,11 @@ class ConcurrentProcessor {
         try {
             // Execute the processing function
             const result = await processingFunction(queueItem.device);
+
+            // Store result
+            if (result && queueItem.device.serialNumber) {
+                results.set(queueItem.device.serialNumber, result);
+            }
             
             // Record success
             const responseTime = Date.now() - startTime;

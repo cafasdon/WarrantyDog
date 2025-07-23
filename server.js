@@ -155,6 +155,38 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
     }
 });
 
+// Get cached warranty data endpoint
+app.post('/api/cached-warranty', (req, res) => {
+    try {
+        const { vendor, serviceTag, maxAgeHours = 24 } = req.body;
+
+        if (!vendor || !serviceTag) {
+            return res.status(400).json({ error: 'vendor and serviceTag are required' });
+        }
+
+        const cachedResponse = dbService.getCachedApiResponse(vendor, serviceTag, maxAgeHours);
+
+        if (cachedResponse && cachedResponse.parsing_status === 'success' && cachedResponse.parsed_data) {
+            res.status(200).json({
+                found: true,
+                parsedData: cachedResponse.parsed_data,
+                responseTimestamp: cachedResponse.response_timestamp,
+                cacheAge: Math.round((Date.now() - new Date(cachedResponse.response_timestamp).getTime()) / 1000 / 60) // minutes
+            });
+        } else {
+            res.status(200).json({
+                found: false,
+                reason: cachedResponse ?
+                    (cachedResponse.parsing_status === 'failed' ? 'parsing_failed' : 'no_parsed_data') :
+                    'not_cached'
+            });
+        }
+    } catch (error) {
+        console.error('Error getting cached warranty data:', error);
+        res.status(500).json({ error: 'Failed to get cached warranty data' });
+    }
+});
+
 // Update parsing status endpoint
 app.post('/api/parsing-status', (req, res) => {
     try {

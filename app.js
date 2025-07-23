@@ -731,7 +731,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.currentIndex = 0;
 
         try {
-            await this.processDevices();
+            // Use concurrent processing for better performance
+            await this.processDevicesConcurrent();
         } catch (error) {
             if (!this.processingCancelled) {
                 this.showError(`Processing failed: ${error.message}`);
@@ -765,7 +766,146 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Process devices that can be processed (Stage 2)
+     * Process devices concurrently with caching (Enhanced Stage 2)
+     */
+    async processDevicesConcurrent() {
+        const allDevices = this.getValidDevicesFromCsv();
+        const processableDevices = this.getProcessableDevices();
+        const total = allDevices.length;
+        const processableCount = processableDevices.length;
+
+        if (processableCount === 0) {
+            this.showError('No devices are ready for processing. Please configure API keys for supported vendors.');
+            return;
+        }
+
+        this.showMessage(`🚀 Starting concurrent processing: ${total} total devices (${processableCount} processable, ${total - processableCount} will be skipped)...`, 'info');
+
+        // Track processing start time
+        this.processingStartTime = Date.now();
+
+        // Group devices by vendor for optimal concurrent processing
+        const devicesByVendor = this.groupDevicesByVendor(processableDevices);
+
+        // Process each vendor concurrently
+        const vendorPromises = Object.entries(devicesByVendor).map(async ([vendor, devices]) => {
+            if (devices.length === 0) return { vendor, results: new Map() };
+
+            console.log(`🔧 Starting concurrent processing for ${vendor}: ${devices.length} devices`);
+
+            // Create vendor-specific concurrent processor
+            const processor = new ConcurrentProcessor(vendor, {
+                maxConcurrency: vendor === 'dell' ? 8 : vendor === 'hp' ? 4 : 3,
+                performanceThreshold: 0.85,
+                responseTimeThreshold: 3000
+            });
+
+            // Define processing function for this vendor
+            const processingFunction = async (device) => {
+                try {
+                    const result = await this.warrantyService.lookupWarranty(device.vendor, device.serialNumber);
+
+                    // Enhance result with device information
+                    result.originalData = device.originalData;
+                    result.deviceName = device.deviceName;
+                    result.location = device.location;
+                    result.model = result.model || device.model;
+
+                    // Update UI in real-time
+                    this.updateDeviceRowRealtime(device, result, 'success');
+
+                    return result;
+                } catch (error) {
+                    console.error(`Error processing ${device.serialNumber}:`, error);
+
+                    const errorResult = {
+                        vendor: device.vendor,
+                        serviceTag: device.serialNumber,
+                        status: 'error',
+                        message: error.message,
+                        originalData: device.originalData,
+                        deviceName: device.deviceName,
+                        location: device.location,
+                        model: device.model
+                    };
+
+                    // Update UI with error
+                    this.updateDeviceRowRealtime(device, errorResult, 'error');
+
+                    return errorResult;
+                }
+            };
+
+            // Start concurrent processing for this vendor
+            const results = await processor.startProcessing(devices, processingFunction);
+
+            console.log(`✅ Completed ${vendor} processing: ${results.size} results (${processor.metrics.cacheHits} cache hits)`);
+
+            return { vendor, results, metrics: processor.metrics };
+        });
+
+        // Wait for all vendors to complete
+        const vendorResults = await Promise.all(vendorPromises);
+
+        // Combine all results and update final statistics
+        let totalSuccessful = 0;
+        let totalFailed = 0;
+        let totalCached = 0;
+        const allResults = [];
+
+        vendorResults.forEach(({ vendor, results, metrics }) => {
+            results.forEach((result, serviceTag) => {
+                allResults.push(result);
+                if (result.status === 'success' || result.status === 'active' || result.status === 'expired') {
+                    totalSuccessful++;
+                } else {
+                    totalFailed++;
+                }
+            });
+
+            if (metrics) {
+                totalCached += metrics.cacheHits;
+                console.log(`📊 ${vendor} metrics: ${metrics.cacheHits} cache hits, ${metrics.cacheMisses} cache misses, ${metrics.cacheHitRate.toFixed(1)}% hit rate`);
+            }
+        });
+
+        // Process skipped devices
+        const skippedDevices = allDevices.filter(device => !device.isSupported || !device.apiConfigured);
+        skippedDevices.forEach(device => {
+            const skipResult = {
+                vendor: device.vendor,
+                serviceTag: device.serialNumber,
+                status: 'skipped',
+                message: !device.isSupported ? 'Vendor not supported' : 'API not configured',
+                originalData: device.originalData,
+                deviceName: device.deviceName,
+                location: device.location,
+                model: device.model
+            };
+            allResults.push(skipResult);
+            this.updateDeviceRowRealtime(device, skipResult, 'skipped');
+        });
+
+        // Store all results
+        this.processedResults = allResults;
+
+        // Show completion summary
+        const processingTime = (Date.now() - this.processingStartTime) / 1000;
+        this.showSuccess(`🎉 Concurrent processing complete!
+✅ Successful: ${totalSuccessful}
+❌ Failed: ${totalFailed}
+⏭️ Skipped: ${skippedDevices.length}
+💾 Cache hits: ${totalCached}
+⏱️ Time: ${processingTime.toFixed(1)}s
+
+📊 Results will remain visible until manually cleared.
+💾 You can safely upload a new CSV - these results will persist.`);
+
+        console.log(`🏁 Concurrent processing completed in ${processingTime.toFixed(1)}s`);
+    }
+
+    /**
+     * Process devices that can be processed (Stage 2) - Sequential fallback
      */
     async processDevices() {
         const allDevices = this.getValidDevicesFromCsv();
@@ -1175,6 +1315,71 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Update retry button visibility
         await this.updateRetryFailedButton();
+    }
+
+    /**
+     * Group devices by vendor for concurrent processing
+     */
+    groupDevicesByVendor(devices) {
+        const grouped = {};
+        devices.forEach(device => {
+            const vendor = device.vendor.toLowerCase();
+            if (!grouped[vendor]) {
+                grouped[vendor] = [];
+            }
+            grouped[vendor].push(device);
+        });
+        return grouped;
+    }
+
+    /**
+     * Update device row in real-time during concurrent processing
+     */
+    updateDeviceRowRealtime(device, result, status) {
+        try {
+            // Find the device in the original list to get its index
+            const allDevices = this.getValidDevicesFromCsv();
+            const deviceIndex = allDevices.findIndex(d =>
+                d.serialNumber === device.serialNumber && d.vendor === device.vendor
+            );
+
+            if (deviceIndex === -1) return;
+
+            const row = this.resultsTable.querySelector(`tbody tr[data-device-index="${deviceIndex}"]`);
+            if (!row) return;
+
+            // Remove processing class
+            row.classList.remove('processing');
+
+            // Update based on status
+            switch (status) {
+                case 'success':
+                    this.updateRowWithWarrantyData(row, result);
+                    break;
+                case 'error':
+                    row.querySelector('.warranty-status').innerHTML = '❌ Error';
+                    row.querySelector('.warranty-type').textContent = 'Error';
+                    row.querySelector('.warranty-end').textContent = 'N/A';
+                    row.querySelector('.warranty-days').textContent = 'N/A';
+                    row.classList.add('error');
+                    break;
+                case 'skipped':
+                    const skipReason = !device.isSupported ? 'Vendor Not Supported' : 'API Not Configured';
+                    row.querySelector('.warranty-status').innerHTML = '⏭️ Skipped';
+                    row.querySelector('.warranty-type').textContent = skipReason;
+                    row.querySelector('.warranty-end').textContent = 'N/A';
+                    row.querySelector('.warranty-days').textContent = 'N/A';
+                    row.classList.add('skipped');
+                    break;
+            }
+
+            // Show live update notification
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`✅ Live update: ${device.serialNumber} - ${status} - ${result.message || 'N/A'} (${timestamp})`);
+
+        } catch (error) {
+            console.error('Error updating device row:', error);
+        }
     }
 
     /**
