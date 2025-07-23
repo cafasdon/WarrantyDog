@@ -801,9 +801,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             console.log(`🔧 Starting concurrent processing for ${vendor}: ${devices.length} devices`);
 
-            // Create vendor-specific concurrent processor
+            // Create vendor-specific concurrent processor with conservative settings
             const processor = new ConcurrentProcessor(vendor, {
-                maxConcurrency: vendor === 'dell' ? 8 : vendor === 'hp' ? 4 : 3,
+                maxConcurrency: vendor === 'dell' ? 2 : vendor === 'hp' ? 2 : 1,
+                minConcurrency: 1,
+                initialConcurrency: 1,
                 performanceThreshold: 0.85,
                 responseTimeThreshold: 3000
             });
