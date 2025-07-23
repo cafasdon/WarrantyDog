@@ -3,6 +3,7 @@ import cors from 'cors';
 import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import DatabaseService from './database/DatabaseService.js';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -10,6 +11,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize database service
+const dbService = new DatabaseService();
+let dbInitialized = false;
 
 // Middleware
 app.use(cors());
@@ -124,8 +129,10 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+    const dbHealth = dbService.healthCheck();
+
     const healthCheck = {
-        status: 'ok',
+        status: dbHealth.status === 'ok' ? 'ok' : 'degraded',
         message: 'WarrantyDog API proxy server is running',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
@@ -133,8 +140,10 @@ app.get('/api/health', (req, res) => {
         version: '1.0.0',
         services: {
             api: 'operational',
-            proxy: 'operational'
-        }
+            proxy: 'operational',
+            database: dbHealth.status
+        },
+        database: dbHealth
     };
 
     res.status(200).json(healthCheck);
@@ -144,17 +153,146 @@ app.get('/api/health', (req, res) => {
 app.get('/api/ready', (req, res) => {
     // Check if server is ready to accept requests
     const readinessCheck = {
-        status: 'ready',
+        status: dbInitialized ? 'ready' : 'not_ready',
         message: 'WarrantyDog server is ready to accept requests',
         timestamp: new Date().toISOString(),
         checks: {
             server: 'ready',
             routes: 'loaded',
-            middleware: 'initialized'
+            middleware: 'initialized',
+            database: dbInitialized ? 'ready' : 'initializing'
         }
     };
 
-    res.status(200).json(readinessCheck);
+    res.status(dbInitialized ? 200 : 503).json(readinessCheck);
+});
+
+// Session Management API Endpoints
+
+// Get active sessions
+app.get('/api/sessions', (req, res) => {
+    try {
+        const sessions = dbService.getActiveSessions();
+        res.json(sessions);
+    } catch (error) {
+        console.error('Error fetching sessions:', error);
+        res.status(500).json({ error: 'Failed to fetch sessions' });
+    }
+});
+
+// Get specific session with devices
+app.get('/api/sessions/:sessionId', (req, res) => {
+    try {
+        const sessionData = dbService.getSessionResumeData(req.params.sessionId);
+        if (!sessionData) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        res.json(sessionData);
+    } catch (error) {
+        console.error('Error fetching session:', error);
+        res.status(500).json({ error: 'Failed to fetch session' });
+    }
+});
+
+// Create new session
+app.post('/api/sessions', (req, res) => {
+    try {
+        const { sessionId, fileName, devices } = req.body;
+
+        // Create session
+        dbService.createSession({
+            id: sessionId,
+            fileName: fileName,
+            totalDevices: devices.length
+        });
+
+        // Insert devices
+        if (devices && devices.length > 0) {
+            dbService.insertDevices(sessionId, devices);
+        }
+
+        res.status(201).json({ sessionId, message: 'Session created successfully' });
+    } catch (error) {
+        console.error('Error creating session:', error);
+        res.status(500).json({ error: 'Failed to create session' });
+    }
+});
+
+// Update session progress
+app.put('/api/sessions/:sessionId/progress', (req, res) => {
+    try {
+        const { processed, successful, failed, skipped } = req.body;
+
+        dbService.updateSessionProgress(req.params.sessionId, {
+            processed, successful, failed, skipped
+        });
+
+        res.json({ message: 'Session progress updated' });
+    } catch (error) {
+        console.error('Error updating session progress:', error);
+        res.status(500).json({ error: 'Failed to update session progress' });
+    }
+});
+
+// Complete session
+app.put('/api/sessions/:sessionId/complete', (req, res) => {
+    try {
+        const { status = 'completed' } = req.body;
+
+        dbService.completeSession(req.params.sessionId, status);
+
+        res.json({ message: 'Session completed' });
+    } catch (error) {
+        console.error('Error completing session:', error);
+        res.status(500).json({ error: 'Failed to complete session' });
+    }
+});
+
+// Get retryable devices for a session
+app.get('/api/sessions/:sessionId/retryable', (req, res) => {
+    try {
+        const devices = dbService.getRetryableDevices(req.params.sessionId);
+        res.json(devices);
+    } catch (error) {
+        console.error('Error fetching retryable devices:', error);
+        res.status(500).json({ error: 'Failed to fetch retryable devices' });
+    }
+});
+
+// Database statistics endpoint
+app.get('/api/database/stats', (req, res) => {
+    try {
+        const stats = dbService.getStatistics();
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching database stats:', error);
+        res.status(500).json({ error: 'Failed to fetch database statistics' });
+    }
+});
+
+// Database cleanup endpoints
+app.get('/api/database/cleanup/recommendations', (req, res) => {
+    try {
+        const recommendations = dbService.getCleanupRecommendations();
+        res.json(recommendations);
+    } catch (error) {
+        console.error('Error fetching cleanup recommendations:', error);
+        res.status(500).json({ error: 'Failed to fetch cleanup recommendations' });
+    }
+});
+
+app.post('/api/database/cleanup', (req, res) => {
+    try {
+        const { daysOld = 30 } = req.body;
+        const result = dbService.performCleanup(daysOld);
+        res.json({
+            message: 'Database cleanup completed',
+            result: result
+        });
+    } catch (error) {
+        console.error('Error performing database cleanup:', error);
+        res.status(500).json({ error: 'Failed to perform database cleanup' });
+    }
 });
 
 // Serve the main application
@@ -162,9 +300,39 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`🐕 WarrantyDog API proxy server running on port ${PORT}`);
-    console.log(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);
-    console.log(`🌐 Web interface available at: http://localhost:${PORT}`);
+// Initialize database and start server
+async function startServer() {
+    try {
+        // Initialize database
+        console.log('Initializing database...');
+        await dbService.initialize();
+        dbInitialized = true;
+        console.log('Database initialized successfully');
+
+        // Start server
+        app.listen(PORT, () => {
+            console.log(`🐕 WarrantyDog API proxy server running on port ${PORT}`);
+            console.log(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);
+            console.log(`🌐 Web interface available at: http://localhost:${PORT}`);
+            console.log(`💾 Database: SQLite with persistent session management`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('\nShutting down gracefully...');
+    dbService.close();
+    process.exit(0);
 });
+
+process.on('SIGTERM', () => {
+    console.log('\nShutting down gracefully...');
+    dbService.close();
+    process.exit(0);
+});
+
+startServer();
