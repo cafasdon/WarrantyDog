@@ -719,7 +719,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.processingState.isActive = true;
         this.processingState.isCompleted = false;
         this.processingState.startTime = Date.now();
-        this.processingState.totalDevices = devices.length;
+        this.processingState.totalDevices = this.validDevices ? this.validDevices.length : 0;
         this.processingState.processedDevices = 0;
         this.processBtn.disabled = true;
         this.processBtn.style.display = 'none';
