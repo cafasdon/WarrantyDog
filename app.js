@@ -24,6 +24,7 @@ class WarrantyChecker {
         this.sessionKey = 'warrantydog_session';
 
         this.initializeElements();
+        this.initializeProcessingState();
         this.bindEvents();
         this.loadApiKeys();
         this.initializeSessionService();
@@ -104,6 +105,59 @@ class WarrantyChecker {
         });
 
         console.log('DOM elements initialized');
+    }
+
+    /**
+     * Initialize processing state management
+     */
+    initializeProcessingState() {
+        // Track processing state
+        this.processingState = {
+            isActive: false,
+            isPaused: false,
+            isCompleted: false,
+            startTime: null,
+            endTime: null,
+            totalDevices: 0,
+            processedDevices: 0,
+            currentDevice: null
+        };
+
+        // Add visibility change handler to maintain state
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.sessionId) {
+                this.refreshSessionState();
+            }
+        });
+
+        // Add beforeunload handler to warn about active processing
+        window.addEventListener('beforeunload', (e) => {
+            if (this.processingState.isActive && !this.processingState.isCompleted) {
+                e.preventDefault();
+                e.returnValue = 'Processing is still active. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+
+        console.log('Processing state management initialized');
+    }
+
+    /**
+     * Refresh session state from database
+     */
+    async refreshSessionState() {
+        try {
+            if (this.sessionId) {
+                const session = await window.sessionService.getSession(this.sessionId);
+                if (session && session.status === 'completed') {
+                    this.processingState.isCompleted = true;
+                    this.showSessionCompletedState();
+                    console.log('Session state refreshed - processing completed');
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing session state:', error);
+        }
     }
 
     /**
@@ -660,6 +714,13 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         this.isProcessing = true;
         this.processingCancelled = false;
+
+        // Update processing state
+        this.processingState.isActive = true;
+        this.processingState.isCompleted = false;
+        this.processingState.startTime = Date.now();
+        this.processingState.totalDevices = devices.length;
+        this.processingState.processedDevices = 0;
         this.processBtn.disabled = true;
         this.processBtn.style.display = 'none';
         this.cancelBtn.style.display = 'inline-block';
@@ -804,6 +865,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 continue;
             }
 
+            // Update processing state with current device
+            this.processingState.currentDevice = device;
+            this.processingState.processedDevices = processed;
+
             if (row) {
                 // Update status to processing with enhanced visual feedback
                 row.querySelector('.warranty-status').innerHTML = '🔄 Processing...';
@@ -873,14 +938,24 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         this.updateProgress(processed, total, successful, failed, skipped);
+
+        // Update processing state
+        this.processingState.isActive = false;
+        this.processingState.isCompleted = true;
+        this.processingState.endTime = Date.now();
+        this.processingState.processedDevices = processed;
+
         this.finalizeProcessing(successful, failed, skipped);
 
-        // Complete session when processing finishes successfully
+        // Complete session when processing finishes successfully (but keep it visible)
         if (!this.processingCancelled && this.sessionId) {
             try {
                 await window.sessionService.completeSession(this.sessionId, 'completed');
-                this.sessionId = null;
-                window.sessionService.clearCurrentSession();
+                // DON'T clear the session - keep it visible for results viewing
+                console.log('Session completed successfully - results remain visible');
+
+                // Update UI to show session is completed but still accessible
+                this.showSessionCompletedState();
             } catch (error) {
                 console.error('Error completing session:', error);
             }
@@ -903,11 +978,59 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         row.classList.remove('processing');
         row.classList.add('data-updated');
 
-        // Update cells with warranty data
-        statusCell.innerHTML = `<span class="status-${result.status}">${this.formatStatus(result.status)}</span>`;
-        typeCell.textContent = result.warrantyType || (result.status === 'error' ? 'Error' : 'N/A');
-        endCell.textContent = result.endDate || 'N/A';
-        daysCell.textContent = result.daysRemaining || 'N/A';
+        // Add timestamp for live updates
+        const timestamp = new Date().toLocaleTimeString();
+
+        // Update cells with warranty data and enhanced formatting
+        if (result.status === 'active') {
+            statusCell.innerHTML = `<span class="status-active">✅ Active</span>`;
+        } else if (result.status === 'expired') {
+            statusCell.innerHTML = `<span class="status-expired">⚠️ Expired</span>`;
+        } else if (result.status === 'error') {
+            statusCell.innerHTML = `<span class="status-error">❌ Error</span>`;
+        } else {
+            statusCell.innerHTML = `<span class="status-${result.status}">${this.formatStatus(result.status)}</span>`;
+        }
+
+        // Enhanced warranty type display
+        if (result.warrantyType) {
+            typeCell.innerHTML = `<strong>${result.warrantyType}</strong>`;
+        } else if (result.status === 'error') {
+            typeCell.innerHTML = `<em>Error: ${result.message || 'Unknown error'}</em>`;
+        } else {
+            typeCell.textContent = 'N/A';
+        }
+
+        // Enhanced date formatting
+        if (result.endDate) {
+            const endDate = new Date(result.endDate);
+            endCell.innerHTML = `<strong>${endDate.toLocaleDateString()}</strong>`;
+        } else {
+            endCell.textContent = 'N/A';
+        }
+
+        // Enhanced days remaining with color coding
+        if (result.daysRemaining !== undefined && result.daysRemaining !== null) {
+            const days = parseInt(result.daysRemaining);
+            let daysDisplay = `<strong>${days}</strong>`;
+
+            if (days < 0) {
+                daysDisplay = `<span style="color: #dc3545;">${days} (Expired)</span>`;
+            } else if (days <= 30) {
+                daysDisplay = `<span style="color: #fd7e14;">${days} (Expiring Soon)</span>`;
+            } else if (days <= 90) {
+                daysDisplay = `<span style="color: #ffc107;">${days}</span>`;
+            } else {
+                daysDisplay = `<span style="color: #28a745;">${days}</span>`;
+            }
+
+            daysCell.innerHTML = daysDisplay;
+        } else {
+            daysCell.textContent = 'N/A';
+        }
+
+        // Add processing timestamp as tooltip
+        row.title = `Last updated: ${timestamp}`;
 
         // Add visual feedback for successful data retrieval
         if (result.status === 'active' || result.status === 'expired') {
@@ -923,10 +1046,74 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }, 2000);
         }
 
+        // Scroll to keep the updated row visible (smooth scrolling)
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Add a subtle flash animation
+        row.style.transition = 'all 0.3s ease';
+
         // Remove the data-updated class after animation
         setTimeout(() => {
             row.classList.remove('data-updated');
+            row.style.transition = '';
         }, 1000);
+
+        console.log(`✅ Live update: ${result.serviceTag} - ${result.status} - ${result.warrantyType || 'N/A'} (${timestamp})`);
+    }
+
+    /**
+     * Show session completed state with persistent results
+     */
+    showSessionCompletedState() {
+        // Update process button to show completion
+        this.processBtn.textContent = '✅ Processing Complete';
+        this.processBtn.disabled = true;
+        this.processBtn.style.background = '#28a745';
+        this.processBtn.style.color = 'white';
+
+        // Show clear session button for manual cleanup
+        if (this.clearSessionBtn) {
+            this.clearSessionBtn.style.display = 'inline-block';
+            this.clearSessionBtn.textContent = '🗑️ Clear Results';
+        }
+
+        // Add completion timestamp to results
+        this.addCompletionTimestamp();
+
+        // Keep results table visible and scrollable
+        this.resultsContainer.style.display = 'block';
+
+        console.log('Session completed - results remain visible for review');
+    }
+
+    /**
+     * Add completion timestamp to results
+     */
+    addCompletionTimestamp() {
+        const timestamp = new Date().toLocaleString();
+
+        // Add or update completion info
+        let completionInfo = document.getElementById('completion-info');
+        if (!completionInfo) {
+            completionInfo = document.createElement('div');
+            completionInfo.id = 'completion-info';
+            completionInfo.style.cssText = `
+                background: #d4edda;
+                border: 1px solid #c3e6cb;
+                color: #155724;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+                font-weight: bold;
+            `;
+            this.resultsContainer.insertBefore(completionInfo, this.resultsTable);
+        }
+
+        completionInfo.innerHTML = `
+            ✅ <strong>Processing Completed</strong> at ${timestamp}<br>
+            📊 Results are saved and will persist until manually cleared<br>
+            💾 You can safely upload a new CSV or refresh the page - these results will remain
+        `;
     }
 
     /**
@@ -949,6 +1136,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         if (retryableFailures > 0) {
             message += `\n\n🔄 ${retryableFailures} failed devices can be retried`;
         }
+
+        message += `\n\n📊 Results will remain visible until manually cleared.`;
+        message += `\n💾 You can safely upload a new CSV - these results will persist.`;
 
         this.showSuccess(message);
 
@@ -1653,10 +1843,62 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Clear session with user confirmation
      */
     async clearSessionWithConfirmation() {
-        if (confirm('Are you sure you want to clear the saved session? This will permanently delete your progress and cannot be undone.')) {
+        const confirmMessage = 'Are you sure you want to clear the current results?\n\n' +
+            '⚠️ This will:\n' +
+            '• Remove all warranty data from the table\n' +
+            '• Clear the current session from the database\n' +
+            '• Reset the interface for a new CSV upload\n\n' +
+            'This action cannot be undone.';
+
+        if (confirm(confirmMessage)) {
             await this.clearSession();
-            this.showMessage('🗑️ Session cleared successfully', 'info');
+            this.clearResultsDisplay();
+            this.showMessage('🗑️ Results cleared successfully - ready for new CSV upload', 'info');
         }
+    }
+
+    /**
+     * Clear the results display and reset UI
+     */
+    clearResultsDisplay() {
+        // Hide results container
+        this.resultsContainer.style.display = 'none';
+
+        // Clear table
+        const tbody = this.resultsTable.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+        }
+
+        // Remove completion info
+        const completionInfo = document.getElementById('completion-info');
+        if (completionInfo) {
+            completionInfo.remove();
+        }
+
+        // Reset process button
+        this.processBtn.textContent = 'Process Warranties';
+        this.processBtn.disabled = true;
+        this.processBtn.style.background = '';
+        this.processBtn.style.color = '';
+
+        // Hide export and clear buttons
+        this.exportBtn.disabled = true;
+        if (this.clearSessionBtn) {
+            this.clearSessionBtn.style.display = 'none';
+        }
+
+        // Reset file input
+        if (this.fileInput) {
+            this.fileInput.value = '';
+        }
+
+        // Clear file info
+        if (this.fileInfo) {
+            this.fileInfo.textContent = 'No file selected';
+        }
+
+        console.log('Results display cleared - ready for new upload');
     }
 
     /**
