@@ -725,7 +725,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.processBtn.style.display = 'none';
         this.cancelBtn.style.display = 'inline-block';
         this.progressContainer.style.display = 'block';
-        this.resultsContainer.style.display = 'none';
+        // Keep results container visible for live updates
+        this.resultsContainer.style.display = 'block';
 
         this.processedResults = [];
         this.currentIndex = 0;
@@ -780,6 +781,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         this.showMessage(`🚀 Starting concurrent processing: ${total} total devices (${processableCount} processable, ${total - processableCount} will be skipped)...`, 'info');
+
+        // Ensure the table is visible and populated
+        this.resultsContainer.style.display = 'block';
+
+        // Mark all processable devices as "Processing..." in the UI
+        this.markDevicesAsProcessing(processableDevices);
 
         // Track processing start time
         this.processingStartTime = Date.now();
@@ -1318,6 +1325,27 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Mark devices as processing in the UI
+     */
+    markDevicesAsProcessing(devices) {
+        const allDevices = this.getValidDevicesFromCsv();
+
+        devices.forEach(device => {
+            const deviceIndex = allDevices.findIndex(d =>
+                d.serialNumber === device.serialNumber && d.vendor === device.vendor
+            );
+
+            if (deviceIndex !== -1) {
+                const row = this.resultsTable.querySelector(`tbody tr[data-device-index="${deviceIndex}"]`);
+                if (row) {
+                    row.querySelector('.warranty-status').innerHTML = '🔄 Processing...';
+                    row.classList.add('processing');
+                }
+            }
+        });
+    }
+
+    /**
      * Group devices by vendor for concurrent processing
      */
     groupDevicesByVendor(devices) {
@@ -1337,16 +1365,29 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      */
     updateDeviceRowRealtime(device, result, status) {
         try {
+            console.log(`🔄 Updating row for ${device.serialNumber} with status: ${status}`);
+
             // Find the device in the original list to get its index
             const allDevices = this.getValidDevicesFromCsv();
             const deviceIndex = allDevices.findIndex(d =>
                 d.serialNumber === device.serialNumber && d.vendor === device.vendor
             );
 
-            if (deviceIndex === -1) return;
+            console.log(`📍 Device index for ${device.serialNumber}: ${deviceIndex}`);
+
+            if (deviceIndex === -1) {
+                console.warn(`❌ Device not found in list: ${device.serialNumber}`);
+                return;
+            }
 
             const row = this.resultsTable.querySelector(`tbody tr[data-device-index="${deviceIndex}"]`);
-            if (!row) return;
+            if (!row) {
+                console.warn(`❌ Row not found for device index: ${deviceIndex}`);
+                console.log(`📊 Available rows:`, this.resultsTable.querySelectorAll('tbody tr').length);
+                return;
+            }
+
+            console.log(`✅ Found row for ${device.serialNumber}, updating with status: ${status}`);
 
             // Remove processing class
             row.classList.remove('processing');
