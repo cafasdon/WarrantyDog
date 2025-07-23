@@ -26,7 +26,7 @@ class WarrantyChecker {
         this.initializeElements();
         this.bindEvents();
         this.loadApiKeys();
-        this.checkForExistingSession();
+        this.initializeSessionService();
     }
 
     /**
@@ -814,13 +814,19 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.updateProgress(processed, total, successful, failed, skipped);
         this.finalizeProcessing(successful, failed, skipped);
 
-        // Clear session when processing completes successfully
-        if (!this.processingCancelled) {
-            this.clearSession();
+        // Complete session when processing finishes successfully
+        if (!this.processingCancelled && this.sessionId) {
+            try {
+                await window.sessionService.completeSession(this.sessionId, 'completed');
+                this.sessionId = null;
+                window.sessionService.clearCurrentSession();
+            } catch (error) {
+                console.error('Error completing session:', error);
+            }
         }
 
         // Show retry failed button if there are failed devices
-        this.updateRetryFailedButton();
+        await this.updateRetryFailedButton();
     }
 
     /**
@@ -886,7 +892,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.showSuccess(message);
 
         // Update retry button visibility
-        this.updateRetryFailedButton();
+        await this.updateRetryFailedButton();
     }
 
     /**
@@ -1482,27 +1488,38 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Session Management Methods for Resume Functionality
+     * Session Management Methods for Resume Functionality (SQLite-based)
      */
 
     /**
-     * Check for existing session on page load
+     * Initialize session service and check for existing sessions
      */
-    checkForExistingSession() {
-        const savedSession = localStorage.getItem(this.sessionKey);
-        if (savedSession) {
-            try {
-                const session = JSON.parse(savedSession);
-                if (this.isValidSession(session)) {
-                    this.showResumeOption(session);
-                } else {
-                    // Clean up invalid session
-                    localStorage.removeItem(this.sessionKey);
-                }
-            } catch (error) {
-                console.error('Error parsing saved session:', error);
-                localStorage.removeItem(this.sessionKey);
+    async initializeSessionService() {
+        try {
+            // First, try to migrate any localStorage sessions
+            await window.sessionService.migrateLocalStorageSession();
+
+            // Check for existing active sessions
+            await this.checkForExistingSessions();
+        } catch (error) {
+            console.error('Error initializing session service:', error);
+        }
+    }
+
+    /**
+     * Check for existing sessions on page load
+     */
+    async checkForExistingSessions() {
+        try {
+            const activeSessions = await window.sessionService.checkForExistingSessions();
+
+            if (activeSessions.length > 0) {
+                // Show the most recent session for resume
+                const latestSession = activeSessions[0];
+                this.showResumeOption(latestSession);
             }
+        } catch (error) {
+            console.error('Error checking for existing sessions:', error);
         }
     }
 
@@ -1511,36 +1528,38 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      */
     isValidSession(session) {
         return session &&
-               session.sessionId &&
-               session.devices &&
-               Array.isArray(session.devices) &&
-               session.devices.length > 0 &&
-               session.processedCount !== undefined &&
-               session.processedCount < session.devices.length &&
-               (Date.now() - session.lastSaved) < (24 * 60 * 60 * 1000); // Valid for 24 hours
+               session.id &&
+               session.total_devices > 0 &&
+               session.processed_count < session.total_devices &&
+               session.status === 'active';
     }
 
     /**
-     * Save current session state
+     * Save current session state to database
      */
-    saveSession(devices, processedCount, successful, failed, skipped) {
-        if (!this.sessionId) {
-            this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
-        }
-
-        const sessionData = {
-            sessionId: this.sessionId,
-            devices: devices,
-            processedCount: processedCount,
-            successful: successful,
-            failed: failed,
-            skipped: skipped,
-            lastSaved: Date.now(),
-            csvFileName: this.fileInfo ? this.fileInfo.textContent : 'Unknown'
-        };
-
+    async saveSession(devices, processedCount, successful, failed, skipped) {
         try {
-            localStorage.setItem(this.sessionKey, JSON.stringify(sessionData));
+            if (!this.sessionId) {
+                this.sessionId = window.sessionService.generateSessionId();
+
+                // Create new session in database
+                await window.sessionService.createSession({
+                    sessionId: this.sessionId,
+                    fileName: this.fileInfo ? this.fileInfo.textContent : 'Unknown',
+                    devices: devices
+                });
+
+                window.sessionService.setCurrentSession(this.sessionId);
+            }
+
+            // Update session progress
+            await window.sessionService.updateSessionProgress(this.sessionId, {
+                processed: processedCount,
+                successful: successful,
+                failed: failed,
+                skipped: skipped
+            });
+
             console.log(`Session saved: ${processedCount}/${devices.length} devices processed`);
         } catch (error) {
             console.error('Error saving session:', error);
@@ -1548,24 +1567,33 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
-     * Clear current session
+     * Clear current session from database
      */
-    clearSession() {
-        localStorage.removeItem(this.sessionKey);
-        this.sessionId = null;
-        this.resumeData = null;
-        if (this.clearSessionBtn) {
-            this.clearSessionBtn.style.display = 'none';
+    async clearSession() {
+        try {
+            if (this.sessionId) {
+                await window.sessionService.completeSession(this.sessionId, 'cancelled');
+            }
+
+            this.sessionId = null;
+            this.resumeData = null;
+            window.sessionService.clearCurrentSession();
+
+            if (this.clearSessionBtn) {
+                this.clearSessionBtn.style.display = 'none';
+            }
+            console.log('Session cleared');
+        } catch (error) {
+            console.error('Error clearing session:', error);
         }
-        console.log('Session cleared');
     }
 
     /**
      * Clear session with user confirmation
      */
-    clearSessionWithConfirmation() {
+    async clearSessionWithConfirmation() {
         if (confirm('Are you sure you want to clear the saved session? This will permanently delete your progress and cannot be undone.')) {
-            this.clearSession();
+            await this.clearSession();
             this.showMessage('🗑️ Session cleared successfully', 'info');
         }
     }
@@ -1575,9 +1603,9 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      */
     showResumeOption(session) {
         const resumeMessage = `📋 Previous session found!\n\n` +
-            `File: ${session.csvFileName}\n` +
-            `Progress: ${session.processedCount}/${session.devices.length} devices processed\n` +
-            `✅ ${session.successful} successful, ❌ ${session.failed} failed, ⏭️ ${session.skipped} skipped\n\n` +
+            `File: ${session.file_name}\n` +
+            `Progress: ${session.processed_count}/${session.total_devices} devices processed\n` +
+            `✅ ${session.successful_count} successful, ❌ ${session.failed_count} failed, ⏭️ ${session.skipped_count} skipped\n\n` +
             `Would you like to resume where you left off?`;
 
         if (confirm(resumeMessage)) {
@@ -1590,40 +1618,53 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Resume processing from saved session
      */
-    resumeSession(session) {
-        console.log('Resuming session:', session.sessionId);
+    async resumeSession(session) {
+        try {
+            console.log('Resuming session:', session.id);
 
-        // Restore session data
-        this.sessionId = session.sessionId;
-        this.csvData = session.devices;
+            // Get full session data from database
+            const sessionData = await window.sessionService.getSession(session.id);
+            if (!sessionData) {
+                this.showMessage('❌ Session data not found', 'error');
+                return;
+            }
 
-        // Display the devices in the table
-        this.displayDetectedDevices(session.devices);
+            // Restore session data
+            this.sessionId = session.id;
+            this.csvData = sessionData.devices;
+            window.sessionService.setCurrentSession(session.id);
 
-        // Show resume status
-        this.showPersistentMessage(
-            `🔄 Session Resumed!\n` +
-            `Continuing from device ${session.processedCount + 1}/${session.devices.length}\n` +
-            `Previous progress: ✅ ${session.successful} successful, ❌ ${session.failed} failed, ⏭️ ${session.skipped} skipped`,
-            'info'
-        );
+            // Display the devices in the table
+            this.displayDetectedDevices(sessionData.devices);
 
-        // Enable processing with resume data
-        this.processBtn.disabled = false;
-        this.processBtn.textContent = `Resume Processing (${session.devices.length - session.processedCount} remaining)`;
+            // Show resume status
+            this.showPersistentMessage(
+                `🔄 Session Resumed!\n` +
+                `Continuing from device ${session.processed_count + 1}/${session.total_devices}\n` +
+                `Previous progress: ✅ ${session.successful_count} successful, ❌ ${session.failed_count} failed, ⏭️ ${session.skipped_count} skipped`,
+                'info'
+            );
 
-        // Show clear session button
-        if (this.clearSessionBtn) {
-            this.clearSessionBtn.style.display = 'inline-block';
+            // Enable processing with resume data
+            this.processBtn.disabled = false;
+            this.processBtn.textContent = `Resume Processing (${session.total_devices - session.processed_count} remaining)`;
+
+            // Show clear session button
+            if (this.clearSessionBtn) {
+                this.clearSessionBtn.style.display = 'inline-block';
+            }
+
+            // Store resume data for processing
+            this.resumeData = {
+                startIndex: session.processed_count,
+                successful: session.successful_count,
+                failed: session.failed_count,
+                skipped: session.skipped_count
+            };
+        } catch (error) {
+            console.error('Error resuming session:', error);
+            this.showMessage('❌ Failed to resume session', 'error');
         }
-
-        // Store resume data for processing
-        this.resumeData = {
-            startIndex: session.processedCount,
-            successful: session.successful,
-            failed: session.failed,
-            skipped: session.skipped
-        };
     }
 
     /**
@@ -1633,10 +1674,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Update the retry failed button visibility
      */
-    updateRetryFailedButton() {
+    async updateRetryFailedButton() {
         if (!this.retryFailedBtn) return;
 
-        const failedDevices = this.getFailedDevices();
+        const failedDevices = await this.getFailedDevices();
         if (failedDevices.length > 0) {
             this.retryFailedBtn.style.display = 'inline-block';
             this.retryFailedBtn.textContent = `🔄 Retry Failed (${failedDevices.length})`;
@@ -1648,13 +1689,34 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Get list of failed devices that can be retried
      */
-    getFailedDevices() {
-        return this.csvData.filter(device =>
-            device.processingState === 'failed' &&
-            device.isRetryable !== false &&
-            device.isSupported &&
-            device.apiConfigured
-        );
+    async getFailedDevices() {
+        try {
+            if (this.sessionId) {
+                const retryableDevices = await window.sessionService.getRetryableDevices(this.sessionId);
+                return retryableDevices.map(device => ({
+                    serialNumber: device.serial_number,
+                    vendor: device.vendor,
+                    model: device.model,
+                    deviceName: device.device_name,
+                    isSupported: Boolean(device.is_supported),
+                    apiConfigured: Boolean(device.api_configured),
+                    processingState: device.processing_state,
+                    errorMessage: device.error_message,
+                    isRetryable: Boolean(device.is_retryable)
+                }));
+            } else {
+                // Fallback to in-memory data if no session
+                return this.csvData.filter(device =>
+                    device.processingState === 'failed' &&
+                    device.isRetryable !== false &&
+                    device.isSupported &&
+                    device.apiConfigured
+                );
+            }
+        } catch (error) {
+            console.error('Error fetching failed devices:', error);
+            return [];
+        }
     }
 
     /**
@@ -1681,7 +1743,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Retry processing for failed devices only
      */
     async retryFailedDevices() {
-        const failedDevices = this.getFailedDevices();
+        const failedDevices = await this.getFailedDevices();
 
         if (failedDevices.length === 0) {
             this.showMessage('No failed devices to retry', 'info');

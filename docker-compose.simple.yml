@@ -10,3 +10,10 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+    volumes:
+      # Database persistence for SQLite
+      - warrantydog-data:/app/data
+
+volumes:
+  warrantydog-data:
+    driver: local
