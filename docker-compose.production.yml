@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  warrantydog:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    image: warrantydog:latest
+    container_name: warrantydog-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - LOG_LEVEL=info
+    volumes:
+      # Optional: Mount logs directory for persistence
+      - warrantydog-logs:/app/logs
+    networks:
+      - warrantydog-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); const options = { hostname: 'localhost', port: 3001, path: '/api/health', timeout: 5000 }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.on('timeout', () => process.exit(1)); req.end();"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.warrantydog.description=WarrantyDog warranty lookup application"
+      - "com.warrantydog.version=1.0.0"
+
+volumes:
+  warrantydog-logs:
+    driver: local
+
+networks:
+  warrantydog-network:
+    driver: bridge
