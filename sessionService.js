@@ -9,9 +9,9 @@ class SessionService {
     }
 
     /**
-     * Create a new session
+     * Create a new session with duplicate handling options
      */
-    async createSession(sessionData) {
+    async createSession(sessionData, options = {}) {
         try {
             const response = await fetch(`${this.baseUrl}/api/sessions`, {
                 method: 'POST',
@@ -21,7 +21,12 @@ class SessionService {
                 body: JSON.stringify({
                     sessionId: sessionData.sessionId,
                     fileName: sessionData.fileName,
-                    devices: sessionData.devices
+                    devices: sessionData.devices,
+                    options: {
+                        skipDuplicates: options.skipDuplicates !== false, // Default true
+                        maxAgeHours: options.maxAgeHours || 24,
+                        updateExisting: options.updateExisting || false
+                    }
                 })
             });
 
@@ -32,9 +37,43 @@ class SessionService {
             const result = await response.json();
             this.currentSessionId = sessionData.sessionId;
             console.log('Session created successfully:', result);
+
+            // Log duplicate handling results
+            if (result.duplicateHandling) {
+                const dh = result.duplicateHandling;
+                console.log(`Duplicate handling: ${dh.summary.fresh} fresh, ${dh.summary.duplicates} duplicates, ${dh.summary.skipped} skipped`);
+            }
+
             return result;
         } catch (error) {
             console.error('Error creating session:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Check for duplicates before creating session
+     */
+    async checkDuplicates(devices, maxAgeHours = 24) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/sessions/check-duplicates`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    devices,
+                    maxAgeHours
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to check duplicates: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error checking duplicates:', error);
             throw error;
         }
     }

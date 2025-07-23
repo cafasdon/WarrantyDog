@@ -197,7 +197,7 @@ app.get('/api/sessions/:sessionId', (req, res) => {
 // Create new session
 app.post('/api/sessions', (req, res) => {
     try {
-        const { sessionId, fileName, devices } = req.body;
+        const { sessionId, fileName, devices, options = {} } = req.body;
 
         // Create session
         dbService.createSession({
@@ -206,15 +206,46 @@ app.post('/api/sessions', (req, res) => {
             totalDevices: devices.length
         });
 
-        // Insert devices
+        // Insert devices with duplicate handling
         if (devices && devices.length > 0) {
-            dbService.insertDevices(sessionId, devices);
-        }
+            const result = dbService.insertDevicesWithDuplicateHandling(sessionId, devices, options);
 
-        res.status(201).json({ sessionId, message: 'Session created successfully' });
+            res.status(201).json({
+                sessionId,
+                message: 'Session created successfully',
+                duplicateHandling: result
+            });
+        } else {
+            res.status(201).json({ sessionId, message: 'Session created successfully' });
+        }
     } catch (error) {
         console.error('Error creating session:', error);
         res.status(500).json({ error: 'Failed to create session' });
+    }
+});
+
+// Check for duplicates before creating session
+app.post('/api/sessions/check-duplicates', (req, res) => {
+    try {
+        const { devices, maxAgeHours = 24 } = req.body;
+
+        const result = dbService.findDuplicateDevices(devices, maxAgeHours);
+
+        res.json({
+            total: devices.length,
+            duplicates: result.duplicates.length,
+            fresh: result.fresh.length,
+            duplicateDetails: result.duplicates.map(d => ({
+                serialNumber: d.device.serialNumber,
+                vendor: d.device.vendor,
+                ageHours: d.ageHours,
+                lastProcessed: d.existingData.last_processed_at,
+                warrantyStatus: d.existingData.warranty_status
+            }))
+        });
+    } catch (error) {
+        console.error('Error checking duplicates:', error);
+        res.status(500).json({ error: 'Failed to check duplicates' });
     }
 });
 
