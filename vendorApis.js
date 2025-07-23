@@ -275,12 +275,37 @@ class DellAPI {
             // Check if data is wrapped in a response object
             if (data && typeof data === 'object' && !Array.isArray(data)) {
                 // Common Dell API response structures
-                if (data.devices) devices = data.devices;
-                else if (data.entitlements) devices = [data]; // Single device response
-                else if (data._metadata && data.length === undefined) {
+                if (data.devices) {
+                    devices = data.devices;
+                } else if (data.entitlements) {
+                    devices = [data]; // Single device response
+                } else if (data._metadata) {
                     // Response with metadata wrapper - extract the actual data
                     const { _metadata, ...actualData } = data;
-                    devices = actualData.devices || actualData.entitlements || [actualData];
+                    // Check if the remaining data is an array or has nested structure
+                    if (Array.isArray(actualData)) {
+                        devices = actualData;
+                    } else if (actualData.devices) {
+                        devices = actualData.devices;
+                    } else if (actualData.entitlements) {
+                        devices = [actualData];
+                    } else {
+                        // Check if any property is an array (common Dell API pattern)
+                        const arrayProps = Object.values(actualData).filter(val => Array.isArray(val));
+                        if (arrayProps.length > 0) {
+                            devices = arrayProps[0]; // Use the first array found
+                        } else {
+                            devices = [actualData]; // Treat as single device
+                        }
+                    }
+                } else {
+                    // Check if any property is an array (Dell API sometimes nests data)
+                    const arrayProps = Object.values(data).filter(val => Array.isArray(val));
+                    if (arrayProps.length > 0) {
+                        devices = arrayProps[0]; // Use the first array found
+                    } else if (data.serviceTag || data.serialNumber) {
+                        devices = [data]; // Single device response
+                    }
                 }
             }
 
