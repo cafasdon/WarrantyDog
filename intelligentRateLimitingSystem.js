@@ -304,8 +304,9 @@ class IntelligentRateLimitingSystem {
         if (this.errorRecovery.circuitState !== 'CLOSED') return false;
         
         // Use burst for batch processing with good performance
-        const performance = this.analytics.getCurrentPerformance();
-        return performance.successRate > 0.9 && performance.averageResponseTime < 2000;
+        const dashboardData = this.analytics.getDashboardData();
+        const performance = dashboardData.currentAnalysis || { overallSuccessRate: 1.0, averageResponseTime: 1000 };
+        return performance.overallSuccessRate > 0.9 && performance.averageResponseTime < 2000;
     }
 
     /**

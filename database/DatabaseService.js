@@ -354,7 +354,26 @@ class DatabaseService {
 
         // Handle fresh devices
         if (fresh.length > 0) {
-            this.insertDevices(sessionId, fresh);
+            try {
+                this.insertDevices(sessionId, fresh);
+            } catch (error) {
+                if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+                    console.log('Some devices already exist in this session, skipping duplicates...');
+                    // Try inserting one by one to handle partial duplicates
+                    fresh.forEach((device, index) => {
+                        try {
+                            this.insertDevices(sessionId, [device]);
+                        } catch (innerError) {
+                            if (innerError.code !== 'SQLITE_CONSTRAINT_UNIQUE') {
+                                throw innerError; // Re-throw non-duplicate errors
+                            }
+                            console.log(`Device ${device.serialNumber} already exists in session, skipping...`);
+                        }
+                    });
+                } else {
+                    throw error; // Re-throw non-duplicate errors
+                }
+            }
         }
 
         // Handle duplicates based on options

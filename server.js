@@ -200,7 +200,26 @@ app.post('/api/sessions', (req, res) => {
     try {
         const { sessionId, fileName, devices, options = {} } = req.body;
 
-        // Create session
+        // Check if session already exists
+        try {
+            const existingSession = dbService.getSession(sessionId);
+            if (existingSession) {
+                console.log(`Session ${sessionId} already exists, updating...`);
+                // Update existing session instead of creating new one
+                const result = dbService.insertDevicesWithDuplicateHandling(sessionId, devices, options);
+
+                res.status(200).json({
+                    sessionId,
+                    message: 'Session updated successfully',
+                    duplicateHandling: result
+                });
+                return;
+            }
+        } catch (error) {
+            // Session doesn't exist, continue with creation
+        }
+
+        // Create new session
         dbService.createSession({
             id: sessionId,
             fileName: fileName,
@@ -221,7 +240,7 @@ app.post('/api/sessions', (req, res) => {
         }
     } catch (error) {
         console.error('Error creating session:', error);
-        res.status(500).json({ error: 'Failed to create session' });
+        res.status(500).json({ error: 'Failed to create session', details: error.message });
     }
 });
 
