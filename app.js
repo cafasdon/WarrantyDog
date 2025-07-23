@@ -6,6 +6,7 @@
  */
 
 import { WarrantyLookupService } from './vendorApis.js';
+import ConcurrentProcessor from './concurrentProcessor.js';
 
 /**
  * Main WarrantyChecker Application Class
