@@ -176,7 +176,7 @@ class ConcurrentProcessor {
                 clearInterval(adaptationInterval);
                 return;
             }
-            this.adaptConcurrency(workers, processingFunction);
+            this.adaptConcurrency(workers, processingFunction, results);
         }, this.config.adaptationInterval);
 
         // Wait for all workers to complete
@@ -284,7 +284,7 @@ class ConcurrentProcessor {
     /**
      * Adapt concurrency based on performance
      */
-    adaptConcurrency(workers, processingFunction) {
+    adaptConcurrency(workers, processingFunction, results) {
         const now = Date.now();
         if (now - this.lastAdaptation < this.config.adaptationInterval) {
             return;
@@ -305,7 +305,7 @@ class ConcurrentProcessor {
         const newConcurrency = this.calculateOptimalConcurrency(currentPerformance);
         
         if (newConcurrency !== this.currentConcurrency) {
-            this.adjustConcurrency(newConcurrency, workers, processingFunction);
+            this.adjustConcurrency(newConcurrency, workers, processingFunction, results);
         }
 
         this.lastAdaptation = now;
@@ -345,7 +345,7 @@ class ConcurrentProcessor {
     /**
      * Adjust concurrency by adding or removing workers
      */
-    adjustConcurrency(newConcurrency, workers, processingFunction) {
+    adjustConcurrency(newConcurrency, workers, processingFunction, results) {
         const oldConcurrency = this.currentConcurrency;
         this.currentConcurrency = newConcurrency;
         
@@ -356,7 +356,7 @@ class ConcurrentProcessor {
             const workersToAdd = newConcurrency - oldConcurrency;
             for (let i = 0; i < workersToAdd; i++) {
                 const workerId = workers.length + i;
-                workers.push(this.createWorker(workerId, processingFunction));
+                workers.push(this.createWorker(workerId, processingFunction, results));
             }
         }
         
