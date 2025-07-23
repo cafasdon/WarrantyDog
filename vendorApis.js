@@ -267,7 +267,27 @@ class DellAPI {
      */
     parseWarrantyResponse(data, serviceTag) {
         try {
-            if (!data || !data.length) {
+            console.log(`[DEBUG] Parsing warranty response for ${serviceTag}:`, JSON.stringify(data, null, 2));
+
+            // Handle different response structures
+            let devices = data;
+
+            // Check if data is wrapped in a response object
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                // Common Dell API response structures
+                if (data.devices) devices = data.devices;
+                else if (data.entitlements) devices = [data]; // Single device response
+                else if (data._metadata && data.length === undefined) {
+                    // Response with metadata wrapper - extract the actual data
+                    const { _metadata, ...actualData } = data;
+                    devices = actualData.devices || actualData.entitlements || [actualData];
+                }
+            }
+
+            console.log(`[DEBUG] Extracted devices for ${serviceTag}:`, devices);
+
+            if (!devices || (Array.isArray(devices) && devices.length === 0)) {
+                console.log(`[DEBUG] No devices found for ${serviceTag}`);
                 return {
                     serviceTag: serviceTag,
                     vendor: 'Dell',
@@ -276,7 +296,10 @@ class DellAPI {
                 };
             }
 
-            const device = data[0];
+            // Get the first device from the array or use the single device
+            const device = Array.isArray(devices) ? devices[0] : devices;
+            console.log(`[DEBUG] Processing device for ${serviceTag}:`, device);
+
             const entitlements = device.entitlements || [];
 
             // Find the primary warranty (usually the longest or most comprehensive)
