@@ -202,7 +202,33 @@ class DellAPI {
 
         const data = await response.json();
         console.log('Dell API Response Data:', data);
-        return this.parseWarrantyResponse(data, serviceTag);
+
+        // Parse the warranty response and store parsing results
+        try {
+            const parsedResult = this.parseWarrantyResponse(data, serviceTag);
+
+            // Store successful parsing result if we have metadata with response ID
+            if (data._metadata && data._metadata.responseId) {
+                await this.updateParsingStatus(data._metadata.responseId, 'success', parsedResult);
+            }
+
+            return parsedResult;
+        } catch (parseError) {
+            console.error(`Parsing error for ${serviceTag}:`, parseError);
+
+            // Store parsing failure if we have metadata with response ID
+            if (data._metadata && data._metadata.responseId) {
+                await this.updateParsingStatus(data._metadata.responseId, 'failed', null, parseError.message);
+            }
+
+            // Return a standardized error response
+            return {
+                serviceTag: serviceTag,
+                vendor: 'Dell',
+                status: 'parsing_error',
+                message: `Failed to parse warranty data: ${parseError.message}`
+            };
+        }
     }
 
     /**
@@ -259,6 +285,32 @@ class DellAPI {
                 return 'Dell API server error. Please try again later.';
             default:
                 return errorMessage;
+        }
+    }
+
+    /**
+     * Update parsing status in database
+     */
+    async updateParsingStatus(responseId, status, parsedData = null, error = null) {
+        try {
+            const response = await fetch('/api/parsing-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    responseId,
+                    status,
+                    parsedData,
+                    error
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to update parsing status:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error updating parsing status:', error);
         }
     }
 

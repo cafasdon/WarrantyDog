@@ -77,6 +77,39 @@ CREATE TABLE IF NOT EXISTS processing_history (
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+-- API responses cache table: Stores raw API responses for reprocessing and debugging
+CREATE TABLE IF NOT EXISTS api_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor TEXT NOT NULL,
+    service_tag TEXT NOT NULL,
+    request_url TEXT NOT NULL,
+    request_method TEXT NOT NULL DEFAULT 'GET',
+    request_headers TEXT NULL, -- JSON string of request headers
+    request_body TEXT NULL, -- JSON string of request body if applicable
+
+    -- Response data
+    response_status INTEGER NOT NULL,
+    response_headers TEXT NULL, -- JSON string of response headers
+    response_body TEXT NOT NULL, -- Raw response body (JSON string)
+    response_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    -- Processing metadata
+    parsing_status TEXT DEFAULT 'pending', -- pending, success, failed, skipped
+    parsing_error TEXT NULL,
+    parsed_data TEXT NULL, -- JSON string of successfully parsed warranty data
+    parsing_attempts INTEGER DEFAULT 0,
+    last_parsed_at DATETIME NULL,
+
+    -- Cache metadata
+    cache_key TEXT GENERATED ALWAYS AS (vendor || '_' || service_tag) STORED,
+    is_valid BOOLEAN DEFAULT 1, -- Mark as invalid if response indicates error
+    expires_at DATETIME NULL, -- Optional expiration for cache invalidation
+
+    -- Timestamps
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
@@ -90,9 +123,18 @@ CREATE INDEX IF NOT EXISTS idx_processing_history_device_id ON processing_histor
 CREATE INDEX IF NOT EXISTS idx_processing_history_session_id ON processing_history(session_id);
 CREATE INDEX IF NOT EXISTS idx_processing_history_started_at ON processing_history(started_at);
 
+CREATE INDEX IF NOT EXISTS idx_api_responses_vendor_tag ON api_responses(vendor, service_tag);
+CREATE INDEX IF NOT EXISTS idx_api_responses_cache_key ON api_responses(cache_key);
+CREATE INDEX IF NOT EXISTS idx_api_responses_parsing_status ON api_responses(parsing_status);
+CREATE INDEX IF NOT EXISTS idx_api_responses_timestamp ON api_responses(response_timestamp);
+CREATE INDEX IF NOT EXISTS idx_api_responses_valid ON api_responses(is_valid, expires_at);
+
 -- Unique constraints to prevent duplicates
-CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_unique_session_serial 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_unique_session_serial
 ON devices(session_id, serial_number, vendor);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_responses_unique_cache
+ON api_responses(vendor, service_tag, response_timestamp);
 
 -- Views for common queries
 CREATE VIEW IF NOT EXISTS session_summary AS
