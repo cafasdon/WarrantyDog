@@ -369,8 +369,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         this.showSuccess(`✅ CSV loaded successfully! Found ${validDevices.length} valid devices out of ${this.csvData.length} total rows.`);
 
-        // Stage 1: Immediately display all detected devices
-        this.displayDetectedDevices(validDevices);
+        // Stage 1: Check for duplicates and display devices
+        await this.checkDuplicatesAndDisplayDevices(validDevices);
         this.processBtn.disabled = false;
     }
 
@@ -486,6 +486,67 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 return false; // Not implemented yet
             default:
                 return false;
+        }
+    }
+
+    /**
+     * Check for duplicates and display devices with duplicate information
+     */
+    async checkDuplicatesAndDisplayDevices(devices) {
+        try {
+            // Check for duplicates
+            const duplicateCheck = await window.sessionService.checkDuplicates(devices, 24);
+
+            if (duplicateCheck.duplicates > 0) {
+                this.showDuplicateDialog(duplicateCheck, devices);
+            } else {
+                this.displayDetectedDevices(devices);
+            }
+        } catch (error) {
+            console.error('Error checking duplicates:', error);
+            // Fallback to normal display if duplicate check fails
+            this.displayDetectedDevices(devices);
+        }
+    }
+
+    /**
+     * Show duplicate detection dialog
+     */
+    showDuplicateDialog(duplicateCheck, devices) {
+        const duplicateMessage = `🔍 Duplicate Detection Results:\n\n` +
+            `📊 Total devices: ${duplicateCheck.total}\n` +
+            `✅ Fresh devices: ${duplicateCheck.fresh}\n` +
+            `🔄 Duplicates found: ${duplicateCheck.duplicates}\n\n` +
+            `Duplicates (already processed within 24 hours):\n` +
+            duplicateCheck.duplicateDetails.map(d =>
+                `• ${d.serialNumber} (${d.vendor}) - ${d.ageHours}h ago`
+            ).join('\n') + '\n\n' +
+            `How would you like to handle duplicates?`;
+
+        if (confirm(duplicateMessage + '\n\nClick OK to SKIP duplicates (recommended) or Cancel to REPROCESS all devices.')) {
+            this.handleDuplicateChoice('skip', devices);
+        } else {
+            this.handleDuplicateChoice('reprocess', devices);
+        }
+    }
+
+    /**
+     * Handle user's duplicate choice
+     */
+    async handleDuplicateChoice(choice, devices) {
+        const options = {
+            skipDuplicates: choice === 'skip',
+            updateExisting: choice === 'reprocess',
+            maxAgeHours: 24
+        };
+
+        this.duplicateHandlingOptions = options;
+        this.displayDetectedDevices(devices);
+
+        if (choice === 'skip') {
+            this.showMessage('✅ Duplicates will be skipped. Existing warranty data will be used for previously processed devices.', 'success');
+        } else {
+            this.showMessage('🔄 All devices will be reprocessed to get fresh warranty data.', 'info');
         }
     }
 
@@ -1542,12 +1603,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             if (!this.sessionId) {
                 this.sessionId = window.sessionService.generateSessionId();
 
-                // Create new session in database
+                // Create new session in database with duplicate handling
                 await window.sessionService.createSession({
                     sessionId: this.sessionId,
                     fileName: this.fileInfo ? this.fileInfo.textContent : 'Unknown',
                     devices: devices
-                });
+                }, this.duplicateHandlingOptions || {});
 
                 window.sessionService.setCurrentSession(this.sessionId);
             }

@@ -280,13 +280,146 @@ class DatabaseService {
     isDeviceProcessed(serialNumber, vendor) {
         const stmt = this.db.prepare(`
             SELECT id, session_id, processing_state, warranty_status, last_processed_at
-            FROM devices 
+            FROM devices
             WHERE serial_number = ? AND vendor = ? AND processing_state = 'success'
             ORDER BY last_processed_at DESC
             LIMIT 1
         `);
-        
+
         return stmt.get(serialNumber, vendor);
+    }
+
+    /**
+     * Get existing warranty data for a device (if available)
+     */
+    getExistingWarrantyData(serialNumber, vendor, maxAgeHours = 24) {
+        const stmt = this.db.prepare(`
+            SELECT
+                warranty_status, warranty_type, warranty_end_date,
+                warranty_days_remaining, ship_date, last_processed_at,
+                session_id, processing_state
+            FROM devices
+            WHERE serial_number = ? AND vendor = ?
+            AND processing_state = 'success'
+            AND last_processed_at > datetime('now', '-' || ? || ' hours')
+            ORDER BY last_processed_at DESC
+            LIMIT 1
+        `);
+
+        return stmt.get(serialNumber, vendor, maxAgeHours);
+    }
+
+    /**
+     * Check for duplicate devices across all sessions
+     */
+    findDuplicateDevices(devices, maxAgeHours = 24) {
+        const duplicates = [];
+        const fresh = [];
+
+        devices.forEach(device => {
+            const existing = this.getExistingWarrantyData(
+                device.serialNumber,
+                device.vendor,
+                maxAgeHours
+            );
+
+            if (existing) {
+                duplicates.push({
+                    device,
+                    existingData: existing,
+                    ageHours: Math.round((Date.now() - new Date(existing.last_processed_at).getTime()) / (1000 * 60 * 60))
+                });
+            } else {
+                fresh.push(device);
+            }
+        });
+
+        return { duplicates, fresh };
+    }
+
+    /**
+     * Bulk insert devices with duplicate detection and handling
+     */
+    insertDevicesWithDuplicateHandling(sessionId, devices, options = {}) {
+        const {
+            skipDuplicates = true,
+            maxAgeHours = 24,
+            updateExisting = false
+        } = options;
+
+        // Find duplicates
+        const { duplicates, fresh } = this.findDuplicateDevices(devices, maxAgeHours);
+
+        console.log(`Found ${duplicates.length} duplicates and ${fresh.length} fresh devices`);
+
+        // Handle fresh devices
+        if (fresh.length > 0) {
+            this.insertDevices(sessionId, fresh);
+        }
+
+        // Handle duplicates based on options
+        const handledDuplicates = [];
+
+        duplicates.forEach(({ device, existingData, ageHours }) => {
+            if (skipDuplicates) {
+                // Create a device record that references existing data
+                const stmt = this.db.prepare(`
+                    INSERT INTO devices (
+                        session_id, serial_number, vendor, model, device_name,
+                        processing_order, processing_state, warranty_status, warranty_type,
+                        warranty_end_date, warranty_days_remaining, ship_date,
+                        is_supported, api_configured, created_at, updated_at,
+                        last_processed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'duplicate_skipped', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+                `);
+
+                const index = devices.indexOf(device);
+                stmt.run(
+                    sessionId,
+                    device.serialNumber,
+                    device.vendor,
+                    device.model || null,
+                    device.deviceName || null,
+                    index,
+                    existingData.warranty_status,
+                    existingData.warranty_type,
+                    existingData.warranty_end_date,
+                    existingData.warranty_days_remaining,
+                    existingData.ship_date,
+                    device.isSupported ? 1 : 0,
+                    device.apiConfigured ? 1 : 0,
+                    existingData.last_processed_at
+                );
+
+                handledDuplicates.push({
+                    device,
+                    action: 'skipped',
+                    reason: `Already processed ${ageHours} hours ago`,
+                    existingData
+                });
+            } else if (updateExisting) {
+                // Insert as fresh device for reprocessing
+                fresh.push(device);
+                handledDuplicates.push({
+                    device,
+                    action: 'reprocess',
+                    reason: `Forced reprocessing (age: ${ageHours} hours)`
+                });
+            }
+        });
+
+        return {
+            inserted: fresh.length,
+            duplicates: duplicates.length,
+            handledDuplicates,
+            summary: {
+                total: devices.length,
+                fresh: fresh.length,
+                duplicates: duplicates.length,
+                skipped: handledDuplicates.filter(h => h.action === 'skipped').length,
+                reprocessed: handledDuplicates.filter(h => h.action === 'reprocess').length
+            }
+        };
     }
 
     /**
