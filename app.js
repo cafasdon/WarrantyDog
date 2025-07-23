@@ -354,13 +354,13 @@ class WarrantyChecker {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            complete: (results) => {
+            complete: async (results) => {
                 console.log('CSV parsing complete:', results);
                 console.log('Data rows:', results.data.length);
                 console.log('First row:', results.data[0]);
 
                 this.csvData = results.data;
-                this.validateCsvData();
+                await this.validateCsvData();
             },
             error: (error) => {
                 console.error('CSV parsing error:', error);
@@ -372,7 +372,7 @@ class WarrantyChecker {
     /**
      * Validate CSV data structure
      */
-    validateCsvData() {
+    async validateCsvData() {
         console.log('Validating CSV data...');
         console.log('CSV data length:', this.csvData.length);
 
@@ -945,7 +945,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.processingState.endTime = Date.now();
         this.processingState.processedDevices = processed;
 
-        this.finalizeProcessing(successful, failed, skipped);
+        await this.finalizeProcessing(successful, failed, skipped);
 
         // Complete session when processing finishes successfully (but keep it visible)
         if (!this.processingCancelled && this.sessionId) {
@@ -1119,7 +1119,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     /**
      * Finalize processing and show summary
      */
-    finalizeProcessing(successful, failed, skipped = 0) {
+    async finalizeProcessing(successful, failed, skipped = 0) {
         this.exportBtn.disabled = false;
 
         let message = `✅ Processing complete!\n`;
