@@ -1172,14 +1172,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             endCell.textContent = 'N/A';
         }
 
-        // Enhanced days remaining with color coding
-        if (result.daysRemaining !== undefined && result.daysRemaining !== null) {
+        // Enhanced days remaining/expired with color coding
+        if (result.status === 'active' && result.daysRemaining !== undefined && result.daysRemaining !== null) {
             const days = parseInt(result.daysRemaining);
             let daysDisplay = `<strong>${days}</strong>`;
 
-            if (days < 0) {
-                daysDisplay = `<span style="color: #dc3545;">${days} (Expired)</span>`;
-            } else if (days <= 30) {
+            if (days <= 30) {
                 daysDisplay = `<span style="color: #fd7e14;">${days} (Expiring Soon)</span>`;
             } else if (days <= 90) {
                 daysDisplay = `<span style="color: #ffc107;">${days}</span>`;
@@ -1188,6 +1186,17 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
 
             daysCell.innerHTML = daysDisplay;
+        } else if (result.status === 'expired' && result.daysExpired !== undefined && result.daysExpired !== null) {
+            const daysExpired = parseInt(result.daysExpired);
+            daysCell.innerHTML = `<span style="color: #dc3545;">-${daysExpired} (Expired)</span>`;
+        } else if (result.daysRemaining !== undefined && result.daysRemaining !== null) {
+            // Fallback for legacy format
+            const days = parseInt(result.daysRemaining);
+            if (days < 0) {
+                daysCell.innerHTML = `<span style="color: #dc3545;">${days} (Expired)</span>`;
+            } else {
+                daysCell.innerHTML = `<strong>${days}</strong>`;
+            }
         } else {
             daysCell.textContent = 'N/A';
         }
