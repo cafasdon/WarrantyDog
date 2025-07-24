@@ -342,6 +342,116 @@ class SessionService {
     }
 
     /**
+     * Find device by serial number in a session
+     */
+    async findDeviceBySerial(sessionId, serialNumber) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/sessions/${sessionId}/devices/${serialNumber}`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return null; // Device not found
+                }
+                throw new Error(`Failed to find device: ${response.statusText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error finding device by serial:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update device state in database
+     */
+    async updateDeviceState(deviceId, stateData) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/devices/${deviceId}/state`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(stateData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to update device state: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error updating device state:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get existing warranty data for an asset tag
+     */
+    async getWarrantyData(serviceTag, vendor) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/warranty-data/${serviceTag}?vendor=${vendor}`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    return null; // No existing data
+                }
+                throw new Error(`Failed to get warranty data: ${response.statusText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error getting warranty data:', error);
+            return null; // Return null on error to proceed with API call
+        }
+    }
+
+    /**
+     * Get warranty data for multiple assets in bulk
+     */
+    async getBulkWarrantyData(deviceList) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/warranty-data/bulk`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ devices: deviceList })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to get bulk warranty data: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error getting bulk warranty data:', error);
+            return []; // Return empty array on error
+        }
+    }
+
+    /**
+     * Store warranty data for an asset tag
+     */
+    async storeWarrantyData(warrantyData) {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/warranty-data`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(warrantyData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to store warranty data: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error storing warranty data:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Clear current session
      */
     clearCurrentSession() {

@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>WarrantyDog 🐕 - Hardware Warranty Checker</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐕</text></svg>">
@@ -71,10 +74,12 @@
         <div class="controls">
             <button id="processBtn" class="btn btn-primary" disabled>Process Warranties</button>
             <button id="cancelBtn" class="btn btn-danger" style="display: none;">❌ Cancel Processing</button>
+            <button id="resumeBtn" class="btn btn-warning" style="display: none;">▶️ Resume Processing</button>
             <button id="retryFailedBtn" class="btn btn-warning" style="display: none;">🔄 Retry Failed</button>
             <button id="clearBtn" disabled>🗑️ Clear</button>
             <button id="exportBtn" disabled>📥 Export Results</button>
             <button id="clearSessionBtn" class="btn btn-secondary" style="display: none;">🔄 Clear Session</button>
+            <button id="migrateBtn" class="btn btn-info">🔄 Standardize Database</button>
             <button id="configBtn">⚙️ Configure APIs</button>
         </div>
         
@@ -91,6 +96,7 @@
                             <th>API Status</th>
                             <th>Warranty Status</th>
                             <th>Warranty Type</th>
+                            <th>Ship Date</th>
                             <th>End Date</th>
                             <th>Days Remaining</th>
                         </tr>
@@ -129,8 +135,20 @@
                     </div>
 
                     <div class="config-section">
-                        <h3>🚧 Lenovo API (Coming Soon)</h3>
-                        <input type="password" id="lenovoApiKey" placeholder="Coming soon" disabled autocomplete="off">
+                        <h3>🔧 Lenovo API Configuration</h3>
+                        <div class="api-credentials">
+                            <input type="password" id="lenovoApiKey" placeholder="Enter Lenovo API Client ID" autocomplete="current-password">
+                        </div>
+                        <div class="api-test-controls">
+                            <button type="button" id="testLenovoApi" class="btn btn-secondary" disabled>🧪 Test API Connection</button>
+                            <span id="testLenovoResult" class="test-result"></span>
+                        </div>
+                        <p class="config-help">
+                            Get your ClientID from <a href="https://supportapi.lenovo.com/documentation/" target="_blank">Lenovo Support API Portal</a><br>
+                            <small>💡 Tip: Lenovo API uses POST requests with ClientID header authentication.</small><br>
+                            <small>📋 API Version: v2.5 | Endpoint: supportapi.lenovo.com | Rate Limit: 30 requests/minute</small><br>
+                            <small>🔧 Supports bulk processing of multiple serial numbers in one request</small>
+                        </p>
                     </div>
 
                     <div class="config-section">
@@ -147,12 +165,30 @@
         </div>
     </div>
 
+    <!-- Warranty Details Modal -->
+    <div id="warrantyDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>📋 Comprehensive Warranty Information</h3>
+                <span class="close" onclick="document.getElementById('warrantyDetailsModal').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="warrantyDetailsContent">
+                    <!-- Warranty details will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('warrantyDetailsModal').style.display='none'">Close</button>
+            </div>
+        </div>
+    </div>
+
     <footer>
         <p>WarrantyDog v0.1.0 | <a href="https://github.com/yourusername/WarrantyDog" target="_blank">GitHub</a></p>
     </footer>
     
     <script src="lib/papaparse.min.js"></script>
-    <script src="sessionService.js?v=20250723-1704"></script>
-    <script type="module" src="app.js?v=20250723-1704"></script>
+    <script src="sessionService.js?v=20250724-0200"></script>
+    <script type="module" src="app.js?v=20250724-0200"></script>
 </body>
 </html>

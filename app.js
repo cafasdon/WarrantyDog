@@ -5,8 +5,7 @@
  * Supports Dell API with plans for Lenovo and HP integration.
  */
 
-import { WarrantyLookupService } from './vendorApis.js?v=20250723-1704';
-import ConcurrentProcessor from './concurrentProcessor.js?v=20250723-1704';
+import { WarrantyLookupService } from './vendorApis.js?v=20250724-0200';
 
 /**
  * Main WarrantyChecker Application Class
@@ -45,6 +44,7 @@ class WarrantyChecker {
         // Processing elements
         this.processBtn = document.getElementById('processBtn');
         this.cancelBtn = document.getElementById('cancelBtn');
+        this.resumeBtn = document.getElementById('resumeBtn');
         this.retryFailedBtn = document.getElementById('retryFailedBtn');
         this.progressContainer = document.getElementById('progressContainer');
         this.progressBar = document.getElementById('progressBar');
@@ -71,6 +71,11 @@ class WarrantyChecker {
         this.dellApiSecretInput = document.getElementById('dellApiSecret');
         this.testDellApiBtn = document.getElementById('testDellApi');
         this.testResultElement = document.getElementById('testResult');
+
+        // Lenovo API elements
+        this.lenovoApiKeyInput = document.getElementById('lenovoApiKey');
+        this.testLenovoApiBtn = document.getElementById('testLenovoApi');
+        this.testLenovoResultElement = document.getElementById('testLenovoResult');
 
         // API status elements
         this.apiStatusContainer = document.getElementById('apiStatus');
@@ -176,6 +181,7 @@ class WarrantyChecker {
         // Processing events
         this.processBtn.addEventListener('click', () => this.startProcessing());
         this.cancelBtn.addEventListener('click', () => this.cancelProcessing());
+        this.resumeBtn.addEventListener('click', () => this.resumeProcessing());
         this.retryFailedBtn.addEventListener('click', () => this.retryFailedDevices());
 
         // Session management events
@@ -185,6 +191,12 @@ class WarrantyChecker {
 
         // Export events
         this.exportBtn.addEventListener('click', () => this.exportResults());
+
+        // Migration events
+        this.migrateBtn = document.getElementById('migrateBtn');
+        if (this.migrateBtn) {
+            this.migrateBtn.addEventListener('click', () => this.migrateExistingData());
+        }
 
         // Configuration events
         this.configBtn.addEventListener('click', () => this.showConfigModal());
@@ -200,8 +212,11 @@ class WarrantyChecker {
         // Use event delegation for modal elements that might not exist yet
         document.addEventListener('click', (e) => {
             if (e.target && e.target.id === 'testDellApi') {
-                console.log('Test API button clicked via delegation');
+                console.log('Test Dell API button clicked via delegation');
                 this.testDellApiConnection();
+            } else if (e.target && e.target.id === 'testLenovoApi') {
+                console.log('Test Lenovo API button clicked via delegation');
+                this.testLenovoApiConnection();
             }
         });
 
@@ -214,13 +229,25 @@ class WarrantyChecker {
                 const hasSecret = apiSecretInput && apiSecretInput.value.trim().length > 0;
                 const bothPresent = hasKey && hasSecret;
 
-                console.log('API credentials changed via delegation, hasKey:', hasKey, 'hasSecret:', hasSecret);
+                console.log('Dell API credentials changed via delegation, hasKey:', hasKey, 'hasSecret:', hasSecret);
                 const testBtn = document.getElementById('testDellApi');
                 if (testBtn) {
                     testBtn.disabled = !bothPresent;
-                    console.log('Test button disabled state:', testBtn.disabled);
+                    console.log('Dell test button disabled state:', testBtn.disabled);
                 } else {
-                    console.error('Test button not found when trying to enable/disable');
+                    console.error('Dell test button not found when trying to enable/disable');
+                }
+            } else if (e.target && e.target.id === 'lenovoApiKey') {
+                const apiKeyInput = document.getElementById('lenovoApiKey');
+                const hasKey = apiKeyInput && apiKeyInput.value.trim().length > 0;
+
+                console.log('Lenovo API key changed via delegation, hasKey:', hasKey);
+                const testBtn = document.getElementById('testLenovoApi');
+                if (testBtn) {
+                    testBtn.disabled = !hasKey;
+                    console.log('Lenovo test button disabled state:', testBtn.disabled);
+                } else {
+                    console.error('Lenovo test button not found when trying to enable/disable');
                 }
             }
         });
@@ -263,6 +290,12 @@ class WarrantyChecker {
         if (dellApiKey && this.dellApiKeyInput) {
             this.dellApiKeyInput.value = dellApiKey;
         }
+
+        const lenovoApiKey = localStorage.getItem('lenovo_api_key');
+        if (lenovoApiKey && this.lenovoApiKeyInput) {
+            this.lenovoApiKeyInput.value = lenovoApiKey;
+        }
+
         this.updateApiStatus();
     }
 
@@ -426,6 +459,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Stage 1: Check for duplicates and display devices
         await this.checkDuplicatesAndDisplayDevices(validDevices);
+
+        // Stage 2: Load any existing cached warranty data
+        await this.loadCachedWarrantyData(validDevices);
+
         this.processBtn.disabled = false;
     }
 
@@ -511,21 +548,82 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Extract device name from row
      */
     extractDeviceName(row) {
-        return row['Name'] || row['Friendly Name'] || row['device_name'] || '';
+        // Try multiple common column names for device name
+        const nameColumns = [
+            'Name', 'Friendly Name', 'device_name', 'Device Name', 'Computer Name',
+            'Hostname', 'Host Name', 'Machine Name', 'System Name', 'PC Name'
+        ];
+
+        for (const col of nameColumns) {
+            if (row[col] && row[col].trim()) {
+                return row[col].trim();
+            }
+        }
+
+        return '';
     }
 
     /**
      * Extract location from row
      */
     extractLocation(row) {
-        return row['Site Name'] || row['Site Friendly Name'] || row['location'] || '';
+        // Try multiple common column names for location
+        const locationColumns = [
+            'Site Name', 'Site Friendly Name', 'location', 'Location', 'Office',
+            'Building', 'Site', 'Branch', 'Department', 'Floor', 'Room'
+        ];
+
+        for (const col of locationColumns) {
+            if (row[col] && row[col].trim()) {
+                return row[col].trim();
+            }
+        }
+
+        return '';
     }
 
     /**
-     * Check if vendor is supported
+     * Check if vendor is supported (has active API integration)
      */
     isSupportedVendor(vendor) {
-        return ['dell', 'lenovo', 'hp'].includes(vendor.toLowerCase());
+        return ['dell', 'lenovo'].includes(vendor.toLowerCase());
+    }
+
+    /**
+     * Check if vendor is recognized (supported or coming soon)
+     */
+    isRecognizedVendor(vendor) {
+        const recognized = ['dell', 'lenovo', 'hp', 'hewlett-packard', 'microsoft', 'asus', 'apple'];
+        return recognized.includes(vendor.toLowerCase());
+    }
+
+    /**
+     * Get vendor status message
+     */
+    getVendorStatusMessage(vendor) {
+        const vendorLower = vendor.toLowerCase();
+
+        // Active vendors
+        if (['dell', 'lenovo'].includes(vendorLower)) {
+            return 'API not configured';
+        }
+
+        // Coming soon vendors
+        if (['hp', 'hewlett-packard'].includes(vendorLower)) {
+            return 'HP API integration coming soon';
+        }
+        if (vendorLower === 'microsoft') {
+            return 'Microsoft API integration coming soon';
+        }
+        if (vendorLower === 'asus') {
+            return 'ASUS API integration coming soon';
+        }
+        if (vendorLower === 'apple') {
+            return 'Apple API integration coming soon';
+        }
+
+        // Unknown vendors
+        return 'Vendor not supported';
     }
 
     /**
@@ -536,7 +634,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             case 'dell':
                 return localStorage.getItem('dell_api_key') !== null;
             case 'lenovo':
-                return false; // Not implemented yet
+                return localStorage.getItem('lenovo_api_key') !== null;
             case 'hp':
                 return false; // Not implemented yet
             default:
@@ -644,6 +742,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 <td><span class="status-${apiStatus.class}">${apiStatus.text}</span></td>
                 <td class="warranty-status">⏳ Pending</td>
                 <td class="warranty-type">-</td>
+                <td class="warranty-ship">-</td>
                 <td class="warranty-end">-</td>
                 <td class="warranty-days">-</td>
             `;
@@ -661,6 +760,22 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      */
     getApiStatusText(device) {
         if (!device.isSupported) {
+            // Check if it's a recognized vendor (coming soon)
+            if (this.isRecognizedVendor(device.vendor)) {
+                const vendorLower = device.vendor.toLowerCase();
+                if (['hp', 'hewlett-packard'].includes(vendorLower)) {
+                    return { text: '🔜 HP Coming Soon', class: 'coming-soon' };
+                }
+                if (vendorLower === 'microsoft') {
+                    return { text: '🔜 Microsoft Coming Soon', class: 'coming-soon' };
+                }
+                if (vendorLower === 'asus') {
+                    return { text: '🔜 ASUS Coming Soon', class: 'coming-soon' };
+                }
+                if (vendorLower === 'apple') {
+                    return { text: '🔜 Apple Coming Soon', class: 'coming-soon' };
+                }
+            }
             return { text: '❌ Not Supported', class: 'not-supported' };
         }
         if (!device.apiConfigured) {
@@ -733,8 +848,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.currentIndex = 0;
 
         try {
-            // Use concurrent processing for better performance
-            await this.processDevicesConcurrent();
+            // Use simple sequential processing for reliability
+            await this.processDevicesSequential();
         } catch (error) {
             if (!this.processingCancelled) {
                 this.showError(`Processing failed: ${error.message}`);
@@ -764,11 +879,403 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         this.processBtn.style.display = 'inline-block';
         this.processBtn.textContent = 'Process Warranties';
         this.cancelBtn.style.display = 'none';
+        this.resumeBtn.style.display = 'inline-block';
         this.progressContainer.style.display = 'none';
     }
 
     /**
-     * Process devices concurrently with caching (Enhanced Stage 2)
+     * Resume processing from where it left off
+     */
+    async resumeProcessing() {
+        console.log('🔄 Resuming processing...');
+        this.processingCancelled = false;
+        this.resumeBtn.style.display = 'none';
+        this.cancelBtn.style.display = 'inline-block';
+        this.progressContainer.style.display = 'block';
+
+        // Continue with remaining devices
+        await this.startProcessing();
+    }
+
+    /**
+     * Simple sequential processing - no caching, no concurrency
+     * Workflow: API call -> Store in DB -> Parse data -> Update UI
+     */
+    async processDevicesSequential() {
+        const allDevices = this.getValidDevicesFromCsv();
+        const processableDevices = allDevices.filter(device => device.isSupported && device.apiConfigured);
+        const skippedDevices = allDevices.filter(device => !device.isSupported || !device.apiConfigured);
+
+        console.log(`🔄 Starting sequential processing: ${processableDevices.length} devices to process, ${skippedDevices.length} to skip`);
+
+        this.processingStartTime = Date.now();
+        let processed = 0;
+        let successful = 0;
+        let failed = 0;
+
+        // Filter out devices that already have cached data loaded
+        const devicesToProcess = processableDevices.filter(device => {
+            const alreadyProcessed = this.processedResults.some(result =>
+                result.serviceTag === device.serialNumber && result.vendor === device.vendor
+            );
+            if (alreadyProcessed) {
+                console.log(`⏭️ Skipping ${device.serialNumber} - already loaded from cache`);
+            }
+            return !alreadyProcessed;
+        });
+
+        // Count devices already loaded from cache
+        const cachedDevices = processableDevices.length - devicesToProcess.length;
+
+        console.log(`📡 Need to fetch data for ${devicesToProcess.length} devices (${cachedDevices} already cached)`);
+
+        // Initialize progress (include cached devices as already successful)
+        this.updateProgress(cachedDevices + skippedDevices.length, allDevices.length, cachedDevices, 0, skippedDevices.length);
+
+        // Process each device sequentially
+        for (const device of devicesToProcess) {
+            if (this.processingCancelled) {
+                console.log('Processing cancelled by user');
+                break;
+            }
+
+            try {
+                console.log(`📡 Fetching new data for ${device.serialNumber} (${device.vendor})`);
+
+                // Step 1: Make API call for new data
+                const apiResult = await this.warrantyService.lookupWarranty(device.vendor, device.serialNumber);
+
+                // Step 2: Store raw API response in database
+                if (window.sessionService) {
+                    try {
+                        await this.storeApiResponse(device, apiResult);
+                    } catch (dbError) {
+                        console.warn(`Database storage failed for ${device.serialNumber}:`, dbError);
+                    }
+                }
+
+                // Step 3: Parse and enhance result with device information
+                const result = {
+                    ...apiResult,
+                    originalData: device.originalData,
+                    deviceName: device.deviceName,
+                    location: device.location,
+                    model: apiResult.model || device.model,
+                    vendor: device.vendor,
+                    serviceTag: device.serialNumber
+                };
+
+                // Step 4: Update UI immediately
+                this.updateDeviceRowRealtime(device, result, 'success');
+                this.processedResults.push(result);
+
+                successful++;
+                console.log(`✅ Successfully processed ${device.serialNumber}: ${result.status}`);
+
+            } catch (error) {
+                console.error(`❌ Failed to process ${device.serialNumber}:`, error);
+
+                const errorResult = {
+                    vendor: device.vendor,
+                    serviceTag: device.serialNumber,
+                    status: 'error',
+                    message: error.message,
+                    originalData: device.originalData,
+                    deviceName: device.deviceName,
+                    location: device.location,
+                    model: device.model
+                };
+
+                this.updateDeviceRowRealtime(device, errorResult, 'error');
+                this.processedResults.push(errorResult);
+                failed++;
+            }
+
+            processed++;
+
+            // Update progress (include cached devices in successful count)
+            this.updateProgress(
+                processed + cachedDevices + skippedDevices.length,
+                allDevices.length,
+                successful + cachedDevices,
+                failed,
+                skippedDevices.length
+            );
+
+            // Small delay to prevent overwhelming the API
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Process skipped devices
+        skippedDevices.forEach(device => {
+            const skipResult = {
+                vendor: device.vendor,
+                serviceTag: device.serialNumber,
+                status: 'skipped',
+                message: this.getVendorStatusMessage(device.vendor),
+                originalData: device.originalData,
+                deviceName: device.deviceName,
+                location: device.location,
+                model: device.model
+            };
+
+            this.updateDeviceRowRealtime(device, skipResult, 'skipped');
+            this.processedResults.push(skipResult);
+        });
+
+        // Final update
+        this.updateProgress(
+            allDevices.length,
+            allDevices.length,
+            successful + cachedDevices,
+            failed,
+            skippedDevices.length
+        );
+
+        // Enable export and show completion
+        this.exportBtn.disabled = false;
+        this.resumeBtn.style.display = 'none';
+
+        const processingTime = (Date.now() - this.processingStartTime) / 1000;
+        const totalSuccessful = successful + cachedDevices;
+
+        this.showSuccess(`🎉 Sequential processing complete!
+✅ Successful: ${totalSuccessful} (${successful} new, ${cachedDevices} cached)
+❌ Failed: ${failed}
+⏭️ Skipped: ${skippedDevices.length}
+⏱️ Time: ${processingTime.toFixed(1)}s
+
+📊 Results ready for export.`);
+
+        console.log(`🏁 Sequential processing completed in ${processingTime.toFixed(1)}s`);
+    }
+
+    /**
+     * Load cached warranty data for devices and display immediately - BULK OPTIMIZED
+     */
+    async loadCachedWarrantyData(devices) {
+        if (!window.sessionService) {
+            console.log('📋 No database service available for cache loading');
+            return;
+        }
+
+        // Filter to only supported devices
+        const supportedDevices = devices.filter(device => device.isSupported && device.apiConfigured);
+
+        if (supportedDevices.length === 0) {
+            console.log('📋 No supported devices to check cache for');
+            return;
+        }
+
+        console.log(`📋 Bulk loading cached warranty data for ${supportedDevices.length} supported devices...`);
+        const startTime = Date.now();
+
+        try {
+            // Get all cached warranty data in one bulk query
+            const cachedDataMap = await this.bulkCheckDatabaseForAssets(supportedDevices);
+
+            const loadTime = Date.now() - startTime;
+            console.log(`⚡ Bulk cache check completed in ${loadTime}ms`);
+
+            let cacheHits = 0;
+
+            // Process each device with its cached data
+            for (const device of supportedDevices) {
+                const cacheKey = `${device.vendor}_${device.serialNumber}`;
+                const cachedData = cachedDataMap.get(cacheKey);
+
+                if (cachedData) {
+                    // Enhance cached data with current device information
+                    const result = {
+                        ...cachedData,
+                        originalData: device.originalData,
+                        deviceName: device.deviceName,
+                        location: device.location,
+                        model: cachedData.model || device.model
+                    };
+
+                    // Update the table row immediately with cached data
+                    this.updateDeviceRowRealtime(device, result, 'success');
+
+                    // Add to processed results
+                    this.processedResults.push(result);
+
+                    cacheHits++;
+                }
+            }
+
+            console.log(`📊 Cache loading summary: ${cacheHits}/${supportedDevices.length} devices found in cache`);
+
+            if (cacheHits > 0) {
+                console.log(`✅ Loaded ${cacheHits} devices from cache in ${loadTime}ms`);
+                this.showSuccess(`💾 Loaded ${cacheHits} devices from cache in ${loadTime}ms. Ready to process remaining devices.`);
+
+                // Enable export if we have cached results
+                if (this.processedResults.length > 0) {
+                    this.exportBtn.disabled = false;
+                }
+            } else {
+                console.log('📋 No cached warranty data found');
+            }
+        } catch (error) {
+            console.error('❌ Failed to bulk load cached data:', error);
+            // Fall back to individual checks if bulk fails
+            console.log('🔄 Falling back to individual cache checks...');
+            await this.loadCachedWarrantyDataIndividual(devices);
+        }
+    }
+
+    /**
+     * Bulk check database for multiple assets in one query
+     */
+    async bulkCheckDatabaseForAssets(devices) {
+        if (!window.sessionService) {
+            return new Map();
+        }
+
+        try {
+            // Extract service tags and vendors for bulk query
+            const deviceList = devices.map(device => ({
+                serviceTag: device.serialNumber,
+                vendor: device.vendor
+            }));
+
+            console.log(`🔍 Bulk checking database for ${deviceList.length} devices`);
+
+            // Make bulk API call
+            const bulkData = await window.sessionService.getBulkWarrantyData(deviceList);
+
+            console.log(`📊 Bulk database response:`, bulkData);
+
+            // Convert to Map for fast lookup
+            const dataMap = new Map();
+
+            if (bulkData && Array.isArray(bulkData)) {
+                bulkData.forEach(item => {
+                    const cacheKey = `${item.vendor}_${item.service_tag}`;
+
+                    // Map database field names to expected field names
+                    // Calculate days remaining locally instead of using stored value
+                    const calculatedDays = this.calculateDaysRemaining(item.warranty_end_date);
+
+                    const mappedData = {
+                        vendor: item.vendor,
+                        serviceTag: item.service_tag,
+                        status: item.warranty_status || item.status,
+                        warrantyType: item.warranty_type,
+                        startDate: item.warranty_start_date,
+                        endDate: item.warranty_end_date,
+                        shipDate: item.ship_date,
+                        daysRemaining: calculatedDays, // Use locally calculated value
+                        isActive: item.is_active,
+                        message: item.message || 'Retrieved from database',
+                        model: item.model,
+                        fromCache: true
+                    };
+
+                    dataMap.set(cacheKey, mappedData);
+                });
+            }
+
+            console.log(`💾 Mapped ${dataMap.size} cached warranty records`);
+            return dataMap;
+
+        } catch (error) {
+            console.error('❌ Failed to bulk check database:', error);
+            return new Map();
+        }
+    }
+
+    /**
+     * Check database for existing warranty data for an asset
+     */
+    async checkDatabaseForAsset(device) {
+        if (!window.sessionService) {
+            console.log(`❌ No sessionService available for ${device.serialNumber}`);
+            return null; // No database service available
+        }
+
+        try {
+            console.log(`🔍 Checking database for ${device.serialNumber} (${device.vendor})`);
+
+            // Check if we have existing warranty data for this asset tag
+            const existingData = await window.sessionService.getWarrantyData(device.serialNumber, device.vendor);
+
+            console.log(`📊 Database response for ${device.serialNumber}:`, existingData);
+
+            if (existingData) {
+                console.log(`💾 Found existing warranty data for ${device.serialNumber}`, existingData);
+
+                // Map database field names to expected field names
+                // Calculate days remaining locally instead of using stored value
+                const calculatedDays = this.calculateDaysRemaining(existingData.warranty_end_date);
+
+                const mappedData = {
+                    vendor: device.vendor,
+                    serviceTag: device.serialNumber,
+                    status: existingData.warranty_status || existingData.status,
+                    warrantyType: existingData.warranty_type,
+                    startDate: existingData.warranty_start_date,
+                    endDate: existingData.warranty_end_date,
+                    shipDate: existingData.ship_date,
+                    daysRemaining: calculatedDays, // Use locally calculated value
+                    isActive: existingData.is_active,
+                    message: existingData.message || 'Retrieved from database',
+                    model: existingData.model,
+                    fromCache: true
+                };
+
+                console.log(`🔧 Mapped cached data for ${device.serialNumber}:`, mappedData);
+                return mappedData;
+            }
+
+            console.log(`❌ No existing data found for ${device.serialNumber}`);
+            return null; // No existing data found
+        } catch (error) {
+            console.error(`❌ Failed to check database for ${device.serialNumber}:`, error);
+            return null; // Proceed with API call on database error
+        }
+    }
+
+    /**
+     * Store API response in database for audit trail
+     */
+    async storeApiResponse(device, apiResult) {
+        if (!window.sessionService) {
+            console.log(`❌ No sessionService available for storing ${device.serialNumber}`);
+            return; // Skip if no database service available
+        }
+
+        try {
+            const warrantyData = {
+                serviceTag: device.serialNumber,
+                vendor: device.vendor,
+                warranty_status: apiResult.status,
+                warranty_type: apiResult.warrantyType || apiResult.type,
+                warranty_start_date: apiResult.startDate,
+                warranty_end_date: apiResult.endDate,
+                ship_date: apiResult.shipDate,
+                warranty_days_remaining: apiResult.daysRemaining,
+                is_active: apiResult.isActive,
+                message: apiResult.message,
+                model: apiResult.model,
+                raw_api_response: JSON.stringify(apiResult),
+                last_updated: new Date().toISOString()
+            };
+
+            console.log(`💾 Storing warranty data for ${device.serialNumber}:`, warrantyData);
+
+            // Store the complete warranty data for future retrieval
+            await window.sessionService.storeWarrantyData(warrantyData);
+
+            console.log(`✅ Successfully stored warranty data for ${device.serialNumber}`);
+        } catch (error) {
+            console.error(`❌ Failed to store warranty data for ${device.serialNumber}:`, error);
+        }
+    }
+
+    /**
+     * Process devices concurrently with caching (Enhanced Stage 2) - DEPRECATED
      */
     async processDevicesConcurrent() {
         const allDevices = this.getValidDevicesFromCsv();
@@ -785,6 +1292,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         // Ensure the table is visible and populated
         this.resultsContainer.style.display = 'block';
+
+        // Initialize progress tracking for concurrent processing BEFORE starting
+        this.concurrentProgress = {
+            total: total,
+            processed: 0,
+            successful: 0,
+            failed: 0,
+            skipped: 0,
+            cached: 0
+        };
 
         // Mark all processable devices as "Processing..." in the UI
         this.markDevicesAsProcessing(processableDevices);
@@ -824,6 +1341,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     // Update UI in real-time
                     this.updateDeviceRowRealtime(device, result, 'success');
 
+                    // TODO: Fix database update integration
+                    // this.updateDeviceInDatabase(device, result, 'success').catch(err =>
+                    //     console.error('Database update failed:', err)
+                    // );
+
                     return result;
                 } catch (error) {
                     console.error(`Error processing ${device.serialNumber}:`, error);
@@ -842,6 +1364,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     // Update UI with error
                     this.updateDeviceRowRealtime(device, errorResult, 'error');
 
+                    // TODO: Fix database update integration
+                    // this.updateDeviceInDatabase(device, errorResult, 'error').catch(err =>
+                    //     console.error('Database update failed:', err)
+                    // );
+
                     return errorResult;
                 }
             };
@@ -857,16 +1384,6 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         // Wait for all vendors to complete
         const vendorResults = await Promise.all(vendorPromises);
 
-        // Initialize progress tracking for concurrent processing
-        this.concurrentProgress = {
-            total: total,
-            processed: 0,
-            successful: 0,
-            failed: 0,
-            skipped: 0,
-            cached: 0
-        };
-
         // Combine all results and update final statistics
         let totalSuccessful = 0;
         let totalFailed = 0;
@@ -876,9 +1393,14 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         vendorResults.forEach(({ vendor, results, metrics }) => {
             results.forEach((result, serviceTag) => {
                 allResults.push(result);
-                if (result.status === 'success' || result.status === 'active' || result.status === 'expired') {
+                // Count all valid API responses as successful (including no_warranty)
+                if (result.status === 'success' || result.status === 'active' || result.status === 'expired' || result.status === 'no_warranty') {
                     totalSuccessful++;
+                } else if (result.status === 'error') {
+                    totalFailed++;
                 } else {
+                    // Log unexpected status for debugging
+                    console.log(`⚠️ Unexpected result status: "${result.status}" for ${serviceTag}`);
                     totalFailed++;
                 }
             });
@@ -896,7 +1418,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 vendor: device.vendor,
                 serviceTag: device.serialNumber,
                 status: 'skipped',
-                message: !device.isSupported ? 'Vendor not supported' : 'API not configured',
+                message: this.getVendorStatusMessage(device.vendor),
                 originalData: device.originalData,
                 deviceName: device.deviceName,
                 location: device.location,
@@ -904,10 +1426,18 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             };
             allResults.push(skipResult);
             this.updateDeviceRowRealtime(device, skipResult, 'skipped');
+            // TODO: Fix database update integration
+            // this.updateDeviceInDatabase(device, skipResult, 'skipped').catch(err =>
+            //     console.error('Database update failed:', err)
+            // );
         });
 
         // Store all results
         this.processedResults = allResults;
+
+        // Enable export button and hide resume button
+        this.exportBtn.disabled = false;
+        this.resumeBtn.style.display = 'none';
 
         // Show completion summary
         const processingTime = (Date.now() - this.processingStartTime) / 1000;
@@ -997,9 +1527,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 skipped++;
 
                 if (row) {
-                    const skipReason = !device.isSupported ? 'Vendor Not Supported' : 'API Not Configured';
+                    const skipReason = this.getVendorStatusMessage(device.vendor);
                     row.querySelector('.warranty-status').innerHTML = `⏭️ Skipped`;
                     row.querySelector('.warranty-type').textContent = skipReason;
+                    row.querySelector('.warranty-ship').textContent = 'N/A';
                     row.querySelector('.warranty-end').textContent = 'N/A';
                     row.querySelector('.warranty-days').textContent = 'N/A';
                 }
@@ -1008,7 +1539,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     vendor: device.vendor,
                     serviceTag: device.serialNumber,
                     status: 'skipped',
-                    message: !device.isSupported ? 'Vendor not supported' : 'API not configured',
+                    message: this.getVendorStatusMessage(device.vendor),
                     originalData: device.originalData,
                     deviceName: device.deviceName,
                     location: device.location,
@@ -1019,7 +1550,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 // Mark device as skipped
                 device.processingState = 'skipped';
                 device.lastProcessed = new Date().toISOString();
-                device.skipReason = !device.isSupported ? 'Vendor not supported' : 'API not configured';
+                device.skipReason = this.getVendorStatusMessage(device.vendor);
 
                 processed++;
                 continue;
@@ -1129,13 +1660,55 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Calculate days remaining from warranty end date locally
+     */
+    calculateDaysRemaining(endDate) {
+        if (!endDate || endDate === 'N/A' || endDate === null) {
+            return null;
+        }
+
+        try {
+            const today = new Date();
+            const warrantyEnd = new Date(endDate);
+
+            // Reset time to start of day for accurate day calculation
+            today.setHours(0, 0, 0, 0);
+            warrantyEnd.setHours(0, 0, 0, 0);
+
+            const diffTime = warrantyEnd - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            return diffDays;
+        } catch (error) {
+            console.error('Error calculating days remaining:', error);
+            return null;
+        }
+    }
+
+    /**
      * Update a table row with warranty data with enhanced visual feedback
      */
     updateRowWithWarrantyData(row, result) {
+        console.log(`🎯 updateRowWithWarrantyData called for ${result.serviceTag}:`, result);
+
         const statusCell = row.querySelector('.warranty-status');
         const typeCell = row.querySelector('.warranty-type');
+        const shipCell = row.querySelector('.warranty-ship');
         const endCell = row.querySelector('.warranty-end');
         const daysCell = row.querySelector('.warranty-days');
+
+        console.log(`🎯 Found cells:`, {
+            statusCell: !!statusCell,
+            typeCell: !!typeCell,
+            shipCell: !!shipCell,
+            endCell: !!endCell,
+            daysCell: !!daysCell
+        });
+
+        if (!statusCell || !typeCell || !shipCell || !endCell || !daysCell) {
+            console.error(`❌ Missing cells for ${result.serviceTag}! Row HTML:`, row.innerHTML);
+            return;
+        }
 
         // Remove processing class and add completion animation
         row.classList.remove('processing');
@@ -1155,16 +1728,40 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             statusCell.innerHTML = `<span class="status-${result.status}">${this.formatStatus(result.status)}</span>`;
         }
 
-        // Enhanced warranty type display
+        // Enhanced warranty type display with comprehensive information
         if (result.warrantyType) {
-            typeCell.innerHTML = `<strong>${result.warrantyType}</strong>`;
+            let warrantyDisplay = `<strong>${result.warrantyType}</strong>`;
+
+            // Add warranty count indicator if multiple warranties
+            if (result.warrantyCount && result.warrantyCount > 1) {
+                warrantyDisplay += `<br><small style="color: #6c757d;">${result.warrantyCount} warranties total</small>`;
+            }
+
+            // Add clickable warranty details if multiple warranties exist
+            if (result.warrantyDetails && result.warrantyDetails.length > 1) {
+                const tooltipDetails = result.warrantyDetails.map(w =>
+                    `${w.type}: ${w.endDate} (${w.isActive ? 'Active' : 'Expired'})`
+                ).join('\n');
+
+                typeCell.innerHTML = `<span title="${tooltipDetails}" style="cursor: pointer; text-decoration: underline;" onclick="window.warrantyChecker.showWarrantyDetails('${result.serviceTag}')">${warrantyDisplay}</span>`;
+            } else {
+                typeCell.innerHTML = warrantyDisplay;
+            }
         } else if (result.status === 'error') {
             typeCell.innerHTML = `<em>Error: ${result.message || 'Unknown error'}</em>`;
         } else {
             typeCell.textContent = 'N/A';
         }
 
-        // Enhanced date formatting
+        // Ship date formatting - ALWAYS show if available
+        if (result.shipDate) {
+            const shipDate = new Date(result.shipDate);
+            shipCell.innerHTML = `<strong>${shipDate.toLocaleDateString()}</strong>`;
+        } else {
+            shipCell.textContent = 'N/A';
+        }
+
+        // Enhanced warranty end date formatting
         if (result.endDate) {
             const endDate = new Date(result.endDate);
             endCell.innerHTML = `<strong>${endDate.toLocaleDateString()}</strong>`;
@@ -1172,37 +1769,38 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             endCell.textContent = 'N/A';
         }
 
-        // Enhanced days remaining/expired with color coding
-        if (result.status === 'active' && result.daysRemaining !== undefined && result.daysRemaining !== null) {
-            const days = parseInt(result.daysRemaining);
-            let daysDisplay = `<strong>${days}</strong>`;
+        // Calculate days remaining locally from end date (avoids API calls)
+        const calculatedDays = this.calculateDaysRemaining(result.endDate);
 
-            if (days <= 30) {
-                daysDisplay = `<span style="color: #fd7e14;">${days} (Expiring Soon)</span>`;
-            } else if (days <= 90) {
-                daysDisplay = `<span style="color: #ffc107;">${days}</span>`;
+        if (calculatedDays !== null) {
+            let daysDisplay;
+
+            if (calculatedDays > 0) {
+                // Active warranty
+                if (calculatedDays <= 30) {
+                    daysDisplay = `<span style="color: #fd7e14;"><strong>${calculatedDays}</strong> (Expiring Soon)</span>`;
+                } else if (calculatedDays <= 90) {
+                    daysDisplay = `<span style="color: #ffc107;"><strong>${calculatedDays}</strong></span>`;
+                } else {
+                    daysDisplay = `<span style="color: #28a745;"><strong>${calculatedDays}</strong></span>`;
+                }
+            } else if (calculatedDays === 0) {
+                daysDisplay = `<span style="color: #fd7e14;"><strong>0</strong> (Expires Today)</span>`;
             } else {
-                daysDisplay = `<span style="color: #28a745;">${days}</span>`;
+                // Expired warranty
+                const daysExpired = Math.abs(calculatedDays);
+                daysDisplay = `<span style="color: #dc3545;">-${daysExpired} (Expired)</span>`;
             }
 
             daysCell.innerHTML = daysDisplay;
-        } else if (result.status === 'expired' && result.daysExpired !== undefined && result.daysExpired !== null) {
-            const daysExpired = parseInt(result.daysExpired);
-            daysCell.innerHTML = `<span style="color: #dc3545;">-${daysExpired} (Expired)</span>`;
-        } else if (result.daysRemaining !== undefined && result.daysRemaining !== null) {
-            // Fallback for legacy format
-            const days = parseInt(result.daysRemaining);
-            if (days < 0) {
-                daysCell.innerHTML = `<span style="color: #dc3545;">${days} (Expired)</span>`;
-            } else {
-                daysCell.innerHTML = `<strong>${days}</strong>`;
-            }
         } else {
             daysCell.textContent = 'N/A';
         }
 
         // Add processing timestamp as tooltip
         row.title = `Last updated: ${timestamp}`;
+
+        // Visual flash is now handled by applyVisualFlash method
 
         // Add visual feedback for successful data retrieval
         if (result.status === 'active' || result.status === 'expired') {
@@ -1218,6 +1816,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }, 2000);
         }
 
+        console.log(`✅ Row updated for ${result.serviceTag} - Status: ${statusCell.innerHTML}, Type: ${typeCell.innerHTML}`);
+
         // Add a subtle flash animation
         row.style.transition = 'all 0.3s ease';
 
@@ -1228,6 +1828,70 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }, 1000);
 
         console.log(`✅ Live update: ${result.serviceTag} - ${result.status} - ${result.warrantyType || 'N/A'} (${timestamp})`);
+    }
+
+    /**
+     * Apply visual flash effect to a table row
+     */
+    applyVisualFlash(row) {
+        // Force a very obvious visual refresh
+        row.style.backgroundColor = '#ffff00'; // Bright yellow flash
+        row.style.border = '2px solid #ff0000'; // Red border
+        row.style.transform = 'scale(1.02)'; // Slight scale effect
+
+        setTimeout(() => {
+            row.style.backgroundColor = '#e8f5e8'; // Light green
+            row.style.border = '1px solid #28a745'; // Green border
+            row.style.transform = 'scale(1.0)';
+        }, 300);
+
+        setTimeout(() => {
+            row.style.backgroundColor = '';
+            row.style.border = '';
+            row.style.transform = '';
+        }, 1500);
+
+        console.log(`🎯 Visual flash applied to row for device at index ${row.dataset.deviceIndex}`);
+    }
+
+    /**
+     * Update device state in database
+     */
+    async updateDeviceInDatabase(device, result, status) {
+        try {
+            if (!this.sessionId || !window.sessionService) {
+                console.log(`⚠️ No session or sessionService available for database update: ${device.serialNumber}`);
+                return;
+            }
+
+            // Find device in database by session and serial number
+            const deviceData = await window.sessionService.findDeviceBySerial(this.sessionId, device.serialNumber);
+            if (!deviceData) {
+                console.log(`⚠️ Device not found in database: ${device.serialNumber}`);
+                return;
+            }
+
+            // Prepare state data based on result
+            const stateData = {
+                processing_state: status === 'success' ? 'success' : status === 'error' ? 'failed' : 'skipped',
+                warranty_status: result.status || null,
+                warranty_type: result.warrantyType || result.type || null,
+                warranty_end_date: result.endDate || null,
+                warranty_days_remaining: result.daysRemaining || null,
+                ship_date: result.shipDate || null,
+                error_message: status === 'error' ? result.message : null,
+                is_retryable: status === 'error' ? (result.retryable !== false) : null,
+                retry_count: 0,
+                last_processed_at: new Date().toISOString()
+            };
+
+            // Update device in database
+            await window.sessionService.updateDeviceState(deviceData.id, stateData);
+            console.log(`💾 Database updated for ${device.serialNumber}: ${stateData.processing_state} -> ${stateData.warranty_status || 'N/A'}`);
+
+        } catch (error) {
+            console.error(`❌ Failed to update device in database: ${device.serialNumber}`, error);
+        }
     }
 
     /**
@@ -1417,9 +2081,13 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             // Remove processing class
             row.classList.remove('processing');
 
+            // Apply visual flash to ALL updates
+            this.applyVisualFlash(row);
+
             // Update based on status
             switch (status) {
                 case 'success':
+                    console.log(`🔧 Calling updateRowWithWarrantyData for ${device.serialNumber}:`, result);
                     this.updateRowWithWarrantyData(row, result);
                     // Add subtle success indicator without scrolling
                     row.classList.add('recently-updated');
@@ -1428,14 +2096,16 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 case 'error':
                     row.querySelector('.warranty-status').innerHTML = '❌ Error';
                     row.querySelector('.warranty-type').textContent = 'Error';
+                    row.querySelector('.warranty-ship').textContent = 'N/A';
                     row.querySelector('.warranty-end').textContent = 'N/A';
                     row.querySelector('.warranty-days').textContent = 'N/A';
                     row.classList.add('error');
                     break;
                 case 'skipped':
-                    const skipReason = !device.isSupported ? 'Vendor Not Supported' : 'API Not Configured';
+                    const skipReason = this.getVendorStatusMessage(device.vendor);
                     row.querySelector('.warranty-status').innerHTML = '⏭️ Skipped';
                     row.querySelector('.warranty-type').textContent = skipReason;
+                    row.querySelector('.warranty-ship').textContent = 'N/A';
                     row.querySelector('.warranty-end').textContent = 'N/A';
                     row.querySelector('.warranty-days').textContent = 'N/A';
                     row.classList.add('skipped');
@@ -1455,6 +2125,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                         break;
                     case 'skipped':
                         this.concurrentProgress.skipped++;
+                        break;
+                    default:
+                        console.log(`⚠️ Unknown status for progress counting: "${status}" for ${device.serialNumber}`);
+                        // Treat unknown status as failed for now
+                        this.concurrentProgress.failed++;
                         break;
                 }
 
@@ -1482,8 +2157,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Update progress display with enhanced information
      */
     updateProgress(processed, total, successful, failed, skipped = 0, currentDevice = null) {
+        console.log(`📊 updateProgress called: ${processed}/${total} (${Math.round((processed / total) * 100)}%) - S:${successful} F:${failed} SK:${skipped}`);
+
         const percentage = Math.round((processed / total) * 100);
         this.progressBar.style.width = `${percentage}%`;
+
+        console.log(`📊 Progress bar updated to ${percentage}%`);
 
         // Enhanced progress text with current device info
         let progressText = `${processed}/${total} (${percentage}%)`;
@@ -1555,10 +2234,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 <td>${result.serviceTag || 'Unknown'}</td>
                 <td>${result.model || 'Unknown'}</td>
                 <td><span class="status-${result.status}">${this.formatStatus(result.status)}</span></td>
-                <td>${result.warrantyType || 'N/A'}</td>
+                <td>${this.formatWarrantyStatus(result.status)}</td>
+                <td>${result.warrantyType || result.type || 'N/A'}</td>
+                <td>${result.shipDate || 'N/A'}</td>
                 <td>${result.endDate || 'N/A'}</td>
                 <td>${result.daysRemaining || 'N/A'}</td>
-                <td>${result.message || 'Success'}</td>
             `;
         });
     }
@@ -1577,36 +2257,238 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Standardize string values for consistent export
+     */
+    standardizeString(value) {
+        if (!value || value === null || value === undefined) return '';
+        return String(value).trim();
+    }
+
+    /**
+     * Standardize vendor names
+     */
+    standardizeVendor(vendor) {
+        if (!vendor) return '';
+        const vendorLower = vendor.toLowerCase();
+        if (vendorLower.includes('dell')) return 'Dell';
+        if (vendorLower.includes('lenovo')) return 'Lenovo';
+        if (vendorLower.includes('hp') || vendorLower.includes('hewlett')) return 'HP';
+        return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
+    }
+
+    /**
+     * Standardize model names for consistent display
+     */
+    standardizeModel(model, vendor) {
+        if (!model) return '';
+
+        // Clean up Lenovo's verbose model paths
+        if (vendor && vendor.toLowerCase().includes('lenovo')) {
+            // Extract meaningful model from Lenovo's path format
+            const parts = model.split('/');
+            const lastPart = parts[parts.length - 1];
+
+            // If last part looks like a model number, use it
+            if (lastPart && lastPart.match(/^[A-Z0-9]+$/)) {
+                return lastPart;
+            }
+
+            // Otherwise, try to find a meaningful model name
+            for (const part of parts) {
+                if (part.includes('THINKPAD') || part.includes('THINKBOOK') || part.includes('THINKCENTRE')) {
+                    return part.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                }
+                if (part.match(/^[0-9]{2}[A-Z]{2}$/)) {
+                    return part;
+                }
+            }
+        }
+
+        // Clean up Dell models
+        if (vendor && vendor.toLowerCase().includes('dell')) {
+            return model.replace(/^DELL\s+/i, '').trim();
+        }
+
+        return model.trim();
+    }
+
+    /**
+     * Standardize warranty status
+     */
+    standardizeWarrantyStatus(status) {
+        if (!status) return 'Unknown';
+        const statusLower = status.toLowerCase();
+        if (statusLower.includes('active') || statusLower === 'active') return 'Active';
+        if (statusLower.includes('expired') || statusLower === 'expired') return 'Expired';
+        if (statusLower.includes('error') || statusLower === 'error') return 'Error';
+        if (statusLower.includes('skipped') || statusLower === 'skipped') return 'Skipped';
+        return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    }
+
+    /**
+     * Standardize warranty type names
+     */
+    standardizeWarrantyType(warrantyType, status, message) {
+        if (!warrantyType) {
+            if (status === 'skipped') return `Skipped - ${message || 'Unknown reason'}`;
+            if (status === 'error') return `Error - ${message || 'Processing failed'}`;
+            return 'Unknown';
+        }
+
+        // Clean up common warranty type variations
+        return warrantyType
+            .replace(/\s+/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase())
+            .trim();
+    }
+
+    /**
+     * Standardize date format to YYYY-MM-DD
+     */
+    standardizeDate(dateValue) {
+        if (!dateValue || dateValue === null || dateValue === undefined) return '';
+
+        try {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return '';
+
+            // Return in YYYY-MM-DD format
+            return date.toISOString().split('T')[0];
+        } catch (error) {
+            return '';
+        }
+    }
+
+    /**
+     * Standardize days remaining values
+     */
+    standardizeDaysRemaining(daysRemaining, status) {
+        if (status === 'expired') return '';
+        if (!daysRemaining && daysRemaining !== 0) return '';
+
+        const days = parseInt(daysRemaining);
+        if (isNaN(days)) return '';
+
+        return days.toString();
+    }
+
+    /**
+     * Standardize boolean values
+     */
+    standardizeBoolean(value) {
+        if (value === null || value === undefined) return false;
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') {
+            const valueLower = value.toLowerCase();
+            return valueLower === 'true' || valueLower === 'yes' || valueLower === '1';
+        }
+        return Boolean(value);
+    }
+
+    /**
+     * Standardize message content
+     */
+    standardizeMessage(message, status) {
+        if (!message) {
+            if (status === 'active') return 'Active warranty';
+            if (status === 'expired') return 'Warranty expired';
+            if (status === 'error') return 'Processing error';
+            if (status === 'skipped') return 'Device skipped';
+            return '';
+        }
+        return message.trim();
+    }
+
+    /**
+     * Standardize processing notes
+     */
+    standardizeProcessingNotes(status, message) {
+        switch (status) {
+            case 'skipped':
+                return `Device skipped - ${message || 'Unknown reason'}`;
+            case 'error':
+                return `Processing failed - ${message || 'Unknown error'}`;
+            case 'active':
+            case 'expired':
+                return 'Successfully processed';
+            default:
+                return `Status: ${status} - ${message || 'No additional notes'}`;
+        }
+    }
+
+    /**
+     * Standardize numeric values
+     */
+    standardizeNumber(value) {
+        if (!value && value !== 0) return '';
+        const num = parseFloat(value);
+        if (isNaN(num)) return '';
+        return num.toString();
+    }
+
+    /**
+     * Migrate existing database records to standardized format
+     */
+    async migrateExistingData() {
+        try {
+            console.log('🔄 Starting database standardization migration...');
+
+            const response = await fetch('/api/migrate-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Migration failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Database migration completed:', result);
+
+            this.showSuccess(`✅ Database standardization completed! Updated ${result.updated} records.`);
+
+            // Reload current session to show standardized data
+            if (this.currentSessionId) {
+                await this.loadSession(this.currentSessionId);
+            }
+
+        } catch (error) {
+            console.error('❌ Database migration failed:', error);
+            this.showError(`❌ Database migration failed: ${error.message}`);
+        }
+    }
+
+    /**
      * Export results to CSV
      */
     exportResults() {
         if (this.processedResults.length === 0) return;
 
         const csvData = this.processedResults.map(result => ({
-            device_name: result.deviceName || '',
-            location: result.location || '',
-            vendor: result.vendor,
-            serial_number: result.serviceTag,
-            model: result.model || '',
-            warranty_status: result.status,
-            warranty_type: result.warrantyType || (result.status === 'skipped' ? 'Skipped - ' + result.message : ''),
-            warranty_start_date: result.startDate || '',
-            warranty_end_date: result.endDate || '',
-            days_remaining: result.daysRemaining || '',
-            is_active: result.isActive || false,
-            ship_date: result.shipDate || '',
-            message: result.message || '',
-            lookup_date: new Date().toISOString().split('T')[0],
-            processing_notes: result.status === 'skipped' ? 'Device skipped - ' + result.message :
-                             result.status === 'error' ? 'Processing failed - ' + result.message :
-                             'Successfully processed',
+            device_name: this.standardizeString(result.deviceName),
+            location: this.standardizeString(result.location),
+            vendor: this.standardizeVendor(result.vendor),
+            serial_number: this.standardizeString(result.serviceTag),
+            model: this.standardizeModel(result.model, result.vendor),
+            warranty_status: this.standardizeWarrantyStatus(result.status),
+            warranty_type: this.standardizeWarrantyType(result.warrantyType, result.status, result.message),
+            warranty_start_date: this.standardizeDate(result.startDate),
+            warranty_end_date: this.standardizeDate(result.endDate),
+            days_remaining: this.standardizeDaysRemaining(result.daysRemaining, result.status),
+            is_active: this.standardizeBoolean(result.isActive),
+            ship_date: this.standardizeDate(result.shipDate),
+            message: this.standardizeMessage(result.message, result.status),
+            lookup_date: this.standardizeDate(new Date().toISOString()),
+            processing_notes: this.standardizeProcessingNotes(result.status, result.message),
             // Include key original CSV data for reference
-            original_name: result.originalData?.Name || '',
-            original_model: result.originalData?.['System Model'] || '',
-            processor: result.originalData?.Processor || '',
-            ram_gb: result.originalData?.['RAM (GB)'] || '',
-            installed_date: result.originalData?.['Installed Date'] || '',
-            last_check_date: result.originalData?.['Last Check Date'] || ''
+            original_name: this.standardizeString(result.originalData?.Name || result.originalData?.['Device Name'] || result.originalData?.['Computer Name']),
+            original_model: this.standardizeString(result.originalData?.['System Model'] || result.originalData?.['Model']),
+            processor: this.standardizeString(result.originalData?.Processor),
+            ram_gb: this.standardizeNumber(result.originalData?.['RAM (GB)'] || result.originalData?.['Total Physical Memory (GB)']),
+            installed_date: this.standardizeDate(result.originalData?.['Installed Date'] || result.originalData?.['Install Date']),
+            last_check_date: this.standardizeDate(result.originalData?.['Last Check Date'] || result.originalData?.['Last Check-in Date'])
         }));
 
         const csv = Papa.unparse(csvData);
@@ -1661,8 +2543,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             const newTestBtn = testBtn.cloneNode(true);
             testBtn.parentNode.replaceChild(newTestBtn, testBtn);
 
-            const newApiInput = apiInput.cloneNode(true);
-            apiInput.parentNode.replaceChild(newApiInput, apiInput);
+            const newApiInput = apiKeyInput.cloneNode(true);
+            apiKeyInput.parentNode.replaceChild(newApiInput, apiKeyInput);
 
             // Add fresh event listeners
             newTestBtn.addEventListener('click', () => {
@@ -1719,9 +2601,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
         const dellApiKey = this.dellApiKeyInput.value.trim();
         const dellApiSecret = this.dellApiSecretInput ? this.dellApiSecretInput.value.trim() : '';
+        const lenovoApiKey = this.lenovoApiKeyInput ? this.lenovoApiKeyInput.value.trim() : '';
 
         console.log('Dell API key length:', dellApiKey.length);
         console.log('Dell API secret length:', dellApiSecret.length);
+        console.log('Lenovo API key length:', lenovoApiKey.length);
 
         // Show saving indicator
         this.saveConfigBtn.disabled = true;
@@ -1757,6 +2641,18 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 }
             } else {
                 throw new Error('Both Dell API Key and API Secret are required for OAuth 2.0 authentication.');
+            }
+
+            // Handle Lenovo API key
+            if (lenovoApiKey) {
+                if (lenovoApiKey.length < 10) {
+                    throw new Error('Lenovo API Client ID appears to be too short. Please check your Lenovo API key.');
+                }
+
+                // Save Lenovo API key
+                localStorage.setItem('lenovo_api_key', lenovoApiKey);
+                this.updateApiStatus();
+                this.showSuccess('✅ Lenovo API Client ID saved successfully!');
             }
 
             // Close modal after successful save
@@ -1915,6 +2811,80 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Test Lenovo API connection
+     */
+    async testLenovoApiConnection() {
+        const apiKey = this.lenovoApiKeyInput.value.trim();
+        const savedApiKey = localStorage.getItem('lenovo_api_key');
+
+        console.log('🔍 Lenovo API Test Debug:');
+        console.log('  Input field value:', apiKey);
+        console.log('  Saved in localStorage:', savedApiKey);
+        console.log('  Input field element:', this.lenovoApiKeyInput);
+
+        // Disable button and show testing state
+        this.testLenovoApiBtn.disabled = true;
+        this.testLenovoApiBtn.textContent = '🔄 Testing...';
+        this.showLenovoTestResult('🧪 Running Lenovo API connection test...', 'info');
+
+        try {
+            if (!apiKey) {
+                // Test without API key to verify endpoint connectivity
+                this.showLenovoTestResult('🔍 Testing API endpoint connectivity...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Try to make a request without API key to test endpoint
+                const response = await fetch('https://supportapi.lenovo.com/v2.5/warranty', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: new URLSearchParams({ Serial: 'TEST123' })
+                });
+
+                if (response.status === 401) {
+                    this.showLenovoTestResult('✅ API endpoint is reachable. Please enter your ClientID to test authentication.', 'warning');
+                } else {
+                    this.showLenovoTestResult('⚠️ Unexpected response from API endpoint. Please enter your ClientID to test properly.', 'warning');
+                }
+                return;
+            }
+
+            // Save the API key temporarily for testing
+            console.log('💾 Temporarily saving Lenovo API key for testing...');
+            localStorage.setItem('lenovo_api_key', apiKey);
+
+            // Test with the warranty service using provided API key
+            this.showLenovoTestResult('🔍 Testing API authentication...', 'info');
+            const result = await this.warrantyService.lookupWarranty('lenovo', 'PF2ABCDE');
+
+            if (result) {
+                this.showLenovoTestResult('✅ Lenovo API connection test passed! ClientID is working correctly.', 'success');
+            } else {
+                this.showLenovoTestResult('⚠️ API responded but returned no data. This may be normal for test serial numbers.', 'warning');
+            }
+
+        } catch (error) {
+            if (error.message.includes('authentication failed') || error.message.includes('401')) {
+                this.showLenovoTestResult('❌ Authentication failed: Please check your Lenovo ClientID.', 'error');
+            } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+                this.showLenovoTestResult('⚠️ Rate limit reached. ClientID appears valid but too many requests.', 'warning');
+            } else if (error.message.includes('not configured')) {
+                this.showLenovoTestResult('❌ Please enter your Lenovo ClientID first.', 'error');
+            } else if (error.message.includes('CORS') || error.message.includes('network')) {
+                this.showLenovoTestResult('⚠️ Network connectivity issue. API endpoint may be reachable but CORS restricted.', 'warning');
+            } else {
+                this.showLenovoTestResult(`❌ Test failed: ${error.message}`, 'error');
+            }
+        } finally {
+            // Reset button
+            this.testLenovoApiBtn.disabled = false;
+            this.testLenovoApiBtn.textContent = '🧪 Test API Connection';
+        }
+    }
+
+    /**
      * Simulate realistic API connection scenarios
      */
     async simulateApiConnectionTest(apiKey) {
@@ -1983,6 +2953,100 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             this.testResultElement.textContent = message;
             this.testResultElement.className = `test-result test-${type}`;
         }
+    }
+
+    /**
+     * Show Lenovo test result in the modal
+     */
+    showLenovoTestResult(message, type) {
+        if (this.testLenovoResultElement) {
+            this.testLenovoResultElement.textContent = message;
+            this.testLenovoResultElement.className = `test-result test-${type}`;
+        }
+    }
+
+    /**
+     * Show comprehensive warranty details for a device
+     */
+    showWarrantyDetails(serviceTag) {
+        // Find the device data from processed results
+        const deviceData = this.processedResults?.find(device => device.serviceTag === serviceTag);
+
+        if (!deviceData || !deviceData.warrantyDetails) {
+            alert('No detailed warranty information available for this device.');
+            return;
+        }
+
+        const modal = document.getElementById('warrantyDetailsModal');
+        const content = document.getElementById('warrantyDetailsContent');
+
+        // Build comprehensive warranty information display
+        let html = `
+            <div style="margin-bottom: 20px;">
+                <h4>🖥️ Device: ${serviceTag}</h4>
+                <p><strong>Model:</strong> ${deviceData.model || 'Unknown'}</p>
+                <p><strong>Vendor:</strong> ${deviceData.vendor}</p>
+                <p><strong>Ship Date:</strong> ${deviceData.shipDate || 'N/A'}</p>
+            </div>
+
+            <h4>📋 Warranty Coverage (${deviceData.warrantyDetails.length} warranties)</h4>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead>
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Warranty Type</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Start Date</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">End Date</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Status</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Days Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        deviceData.warrantyDetails.forEach(warranty => {
+            const daysRemaining = this.calculateDaysRemaining(warranty.endDate);
+            const statusColor = warranty.isActive ? '#28a745' : '#dc3545';
+            const statusText = warranty.isActive ? 'Active' : 'Expired';
+
+            let daysDisplay = 'N/A';
+            if (daysRemaining !== null) {
+                if (daysRemaining > 0) {
+                    daysDisplay = `${daysRemaining} days`;
+                } else if (daysRemaining === 0) {
+                    daysDisplay = 'Expires today';
+                } else {
+                    daysDisplay = `${Math.abs(daysRemaining)} days ago`;
+                }
+            }
+
+            html += `
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;"><strong>${warranty.type}</strong><br><small style="color: #6c757d;">${warranty.fullType}</small></td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">${warranty.startDate || 'N/A'}</td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">${warranty.endDate || 'N/A'}</td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6; color: ${statusColor};"><strong>${statusText}</strong></td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">${daysDisplay}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+                <h5>📊 Summary</h5>
+                <p><strong>Primary Warranty:</strong> ${deviceData.primaryWarrantyType || deviceData.warrantyType}</p>
+                <p><strong>Overall Status:</strong> <span style="color: ${deviceData.status === 'active' ? '#28a745' : '#dc3545'};">${deviceData.status.toUpperCase()}</span></p>
+                <p><strong>Total Warranties:</strong> ${deviceData.warrantyDetails.length}</p>
+                <p><strong>Active Warranties:</strong> ${deviceData.warrantyDetails.filter(w => w.isActive).length}</p>
+            </div>
+        `;
+
+        content.innerHTML = html;
+        modal.style.display = 'block';
     }
 
     /**
@@ -2419,6 +3483,6 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new WarrantyChecker();
+    window.warrantyChecker = new WarrantyChecker();
 });
 

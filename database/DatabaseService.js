@@ -261,17 +261,30 @@ class DatabaseService {
         `);
         
         return stmt.run(
-            stateData.processingState,
-            stateData.warrantyStatus || null,
-            stateData.warrantyType || null,
-            stateData.warrantyEndDate || null,
-            stateData.warrantyDaysRemaining || null,
-            stateData.shipDate || null,
-            stateData.errorMessage || null,
-            stateData.isRetryable !== undefined ? (stateData.isRetryable ? 1 : 0) : null,
-            stateData.retryCount || 0,
+            stateData.processing_state || stateData.processingState,
+            stateData.warranty_status || stateData.warrantyStatus || null,
+            stateData.warranty_type || stateData.warrantyType || null,
+            stateData.warranty_end_date || stateData.warrantyEndDate || null,
+            stateData.warranty_days_remaining || stateData.warrantyDaysRemaining || null,
+            stateData.ship_date || stateData.shipDate || null,
+            stateData.error_message || stateData.errorMessage || null,
+            stateData.is_retryable !== undefined ? (stateData.is_retryable ? 1 : 0) :
+                stateData.isRetryable !== undefined ? (stateData.isRetryable ? 1 : 0) : null,
+            stateData.retry_count || stateData.retryCount || 0,
             deviceId
         );
+    }
+
+    /**
+     * Find device by serial number in a session
+     */
+    findDeviceBySerial(sessionId, serialNumber) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM devices
+            WHERE session_id = ? AND serial_number = ?
+        `);
+
+        return stmt.get(sessionId, serialNumber);
     }
 
     /**
@@ -290,7 +303,140 @@ class DatabaseService {
     }
 
     /**
-     * Get existing warranty data for a device (if available)
+     * Get existing warranty data from API responses cache
+     */
+    getWarrantyData(serviceTag, vendor) {
+        const stmt = this.db.prepare(`
+            SELECT parsed_data, response_timestamp, parsing_status
+            FROM api_responses
+            WHERE service_tag = ? AND vendor = ?
+            AND parsing_status = 'success'
+            AND parsed_data IS NOT NULL
+            ORDER BY response_timestamp DESC
+            LIMIT 1
+        `);
+
+        const result = stmt.get(serviceTag, vendor);
+        if (result && result.parsed_data) {
+            try {
+                return JSON.parse(result.parsed_data);
+            } catch (error) {
+                console.error('Failed to parse cached warranty data:', error);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get warranty data for multiple devices in bulk
+     */
+    getBulkWarrantyData(devices) {
+        if (!devices || devices.length === 0) {
+            return [];
+        }
+
+        // Create placeholders for the IN clause
+        const placeholders = devices.map(() => '(?, ?)').join(', ');
+
+        // Flatten the device array for the query parameters
+        const params = devices.flatMap(device => [device.serviceTag, device.vendor]);
+
+        const stmt = this.db.prepare(`
+            SELECT
+                service_tag,
+                vendor,
+                parsed_data,
+                response_timestamp,
+                parsing_status
+            FROM api_responses
+            WHERE (service_tag, vendor) IN (VALUES ${placeholders})
+            AND parsing_status = 'success'
+            AND parsed_data IS NOT NULL
+            ORDER BY response_timestamp DESC
+        `);
+
+        const results = stmt.all(...params);
+
+        // Parse and deduplicate results (keep most recent for each device)
+        const deviceMap = new Map();
+
+        results.forEach(row => {
+            const key = `${row.vendor}_${row.service_tag}`;
+
+            if (!deviceMap.has(key)) {
+                try {
+                    const parsedData = JSON.parse(row.parsed_data);
+
+                    // Add database fields for compatibility
+                    const warrantyData = {
+                        service_tag: row.service_tag,
+                        vendor: row.vendor,
+                        warranty_status: parsedData.status,
+                        warranty_type: parsedData.warrantyType,
+                        warranty_start_date: parsedData.startDate,
+                        warranty_end_date: parsedData.endDate,
+                        ship_date: parsedData.shipDate,
+                        warranty_days_remaining: parsedData.daysRemaining,
+                        is_active: parsedData.isActive,
+                        message: parsedData.message,
+                        model: parsedData.model,
+                        response_timestamp: row.response_timestamp
+                    };
+
+                    deviceMap.set(key, warrantyData);
+                } catch (error) {
+                    console.error(`Failed to parse warranty data for ${row.service_tag}:`, error);
+                }
+            }
+        });
+
+        return Array.from(deviceMap.values());
+    }
+
+    /**
+     * Store warranty data in API responses cache
+     */
+    storeWarrantyData(warrantyData) {
+        // First, store or update the API response
+        const stmt = this.db.prepare(`
+            INSERT OR REPLACE INTO api_responses (
+                vendor, service_tag, request_url, request_method,
+                response_status, response_body, response_timestamp,
+                parsing_status, parsed_data, last_parsed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        const parsedData = {
+            vendor: warrantyData.vendor,
+            serviceTag: warrantyData.serviceTag,
+            status: warrantyData.warranty_status,
+            warrantyType: warrantyData.warranty_type,
+            startDate: warrantyData.warranty_start_date,
+            endDate: warrantyData.warranty_end_date,
+            shipDate: warrantyData.ship_date,
+            daysRemaining: warrantyData.warranty_days_remaining,
+            isActive: warrantyData.is_active,
+            message: warrantyData.message,
+            model: warrantyData.model
+        };
+
+        return stmt.run(
+            warrantyData.vendor,
+            warrantyData.serviceTag,
+            'warranty_lookup', // request_url placeholder
+            'GET', // request_method
+            200, // response_status (assuming success)
+            warrantyData.raw_api_response || JSON.stringify(parsedData), // response_body
+            warrantyData.last_updated, // response_timestamp
+            'success', // parsing_status
+            JSON.stringify(parsedData), // parsed_data
+            warrantyData.last_updated // last_parsed_at
+        );
+    }
+
+    /**
+     * Get existing warranty data for a device (if available) - DEPRECATED
      */
     getExistingWarrantyData(serialNumber, vendor, maxAgeHours = 24) {
         const stmt = this.db.prepare(`
