@@ -108,22 +108,34 @@ class ConcurrentProcessor {
         this.isPaused = false;
         this.processingStartTime = Date.now();
 
-        // Pre-filter devices through cache
-        console.log(`[${this.vendor}] Checking cache for ${devices.length} devices...`);
+        // Pre-filter devices through cache - PARALLEL PROCESSING
+        console.log(`[${this.vendor}] Checking cache for ${devices.length} devices in parallel...`);
+        const cacheStartTime = Date.now();
+
+        // Check all devices in parallel
+        const cachePromises = devices.map(async (device) => {
+            const cachedResult = await this.checkCache(device);
+            return { device, cachedResult };
+        });
+
+        // Wait for all cache checks to complete
+        const cacheResults = await Promise.all(cachePromises);
+
+        // Separate cached and uncached devices
         const uncachedDevices = [];
         const cachedResults = new Map();
 
-        for (const device of devices) {
-            const cachedResult = await this.checkCache(device);
+        cacheResults.forEach(({ device, cachedResult }) => {
             if (cachedResult) {
                 cachedResults.set(device.serialNumber, cachedResult);
                 console.log(`[${this.vendor}] Cache hit for ${device.serialNumber}`);
             } else {
                 uncachedDevices.push(device);
             }
-        }
+        });
 
-        console.log(`[${this.vendor}] Cache results: ${cachedResults.size} hits, ${uncachedDevices.length} misses`);
+        const cacheTime = Date.now() - cacheStartTime;
+        console.log(`[${this.vendor}] Cache check completed in ${cacheTime}ms: ${cachedResults.size} hits, ${uncachedDevices.length} misses`);
 
         // Initialize queue with uncached devices only
         this.requestQueue = uncachedDevices.map((device, index) => ({
@@ -197,7 +209,12 @@ class ConcurrentProcessor {
             // Get next item from queue
             const queueItem = this.getNextQueueItem();
             if (!queueItem) {
-                // No more items, wait a bit and check again
+                // No more items, check if we should continue waiting
+                if (this.requestQueue.length === 0 && this.activeRequests.size === 0) {
+                    console.log(`[${this.vendor}] Worker ${workerId} - No more items and no active requests, exiting`);
+                    break;
+                }
+                // Wait a bit and check again
                 await this.sleep(100);
                 continue;
             }
@@ -249,22 +266,37 @@ class ConcurrentProcessor {
             // Execute the processing function
             const result = await processingFunction(queueItem.device);
 
-            // Store result
+            // Store result (even if it's an error result)
             if (result && queueItem.device.serialNumber) {
                 results.set(queueItem.device.serialNumber, result);
             }
-            
-            // Record success
-            const responseTime = Date.now() - startTime;
-            this.recordSuccess(responseTime);
-            
+
+            // Check if result indicates an error (but was handled gracefully)
+            if (result && result.status === 'error') {
+                // Record failure but don't throw
+                const responseTime = Date.now() - startTime;
+                this.recordFailure(new Error(result.message || 'Processing error'), responseTime);
+
+                // Handle retry logic for genuine errors (not handled gracefully)
+                if (this.shouldRetry(queueItem, new Error(result.message)) && result.message && !result.message.includes('handled')) {
+                    queueItem.attempts++;
+                    queueItem.addedAt = Date.now();
+                    this.requestQueue.push(queueItem);
+                    console.log(`[${this.vendor}] Retrying ${queueItem.id} (attempt ${queueItem.attempts}/${queueItem.maxAttempts})`);
+                }
+            } else {
+                // Record success
+                const responseTime = Date.now() - startTime;
+                this.recordSuccess(responseTime);
+            }
+
             return result;
-            
+
         } catch (error) {
-            // Record failure
+            // Record failure for genuine exceptions
             const responseTime = Date.now() - startTime;
             this.recordFailure(error, responseTime);
-            
+
             // Handle retry logic
             if (this.shouldRetry(queueItem, error)) {
                 queueItem.attempts++;
@@ -272,9 +304,26 @@ class ConcurrentProcessor {
                 this.requestQueue.push(queueItem);
                 console.log(`[${this.vendor}] Retrying ${queueItem.id} (attempt ${queueItem.attempts}/${queueItem.maxAttempts})`);
             }
-            
-            throw error;
-            
+
+            // Create error result instead of throwing
+            const errorResult = {
+                vendor: queueItem.device.vendor,
+                serviceTag: queueItem.device.serialNumber,
+                status: 'error',
+                message: error.message,
+                originalData: queueItem.device.originalData,
+                deviceName: queueItem.device.deviceName,
+                location: queueItem.device.location,
+                model: queueItem.device.model
+            };
+
+            // Store error result
+            if (queueItem.device.serialNumber) {
+                results.set(queueItem.device.serialNumber, errorResult);
+            }
+
+            return errorResult;
+
         } finally {
             // Remove from active requests
             this.activeRequests.delete(requestId);

@@ -31,30 +31,39 @@ const RATE_LIMITS = {
     }
 };
 
-// Initialize intelligent rate limiting systems for each vendor
-const intelligentRateLimiters = {
-    dell: new IntelligentRateLimitingSystem('dell', {
-        mode: 'adaptive',
-        rateLimiter: {
-            requestsPerMinute: RATE_LIMITS.dell.requestsPerMinute,
-            requestsPerHour: RATE_LIMITS.dell.requestsPerHour
-        }
-    }),
-    lenovo: new IntelligentRateLimitingSystem('lenovo', {
-        mode: 'adaptive',
-        rateLimiter: {
-            requestsPerMinute: RATE_LIMITS.lenovo.requestsPerMinute,
-            requestsPerHour: RATE_LIMITS.lenovo.requestsPerHour
-        }
-    }),
-    hp: new IntelligentRateLimitingSystem('hp', {
-        mode: 'adaptive',
-        rateLimiter: {
-            requestsPerMinute: RATE_LIMITS.hp.requestsPerMinute,
-            requestsPerHour: RATE_LIMITS.hp.requestsPerHour
-        }
-    })
-};
+// Global singleton for intelligent rate limiting systems
+window.warrantyDogRateLimiters = window.warrantyDogRateLimiters || null;
+
+function getIntelligentRateLimiters() {
+    if (!window.warrantyDogRateLimiters) {
+        console.log('🔧 Initializing intelligent rate limiting systems...');
+        window.warrantyDogRateLimiters = {
+            dell: new IntelligentRateLimitingSystem('dell', {
+                mode: 'adaptive',
+                rateLimiter: {
+                    requestsPerMinute: RATE_LIMITS.dell.requestsPerMinute,
+                    requestsPerHour: RATE_LIMITS.dell.requestsPerHour
+                }
+            }),
+            lenovo: new IntelligentRateLimitingSystem('lenovo', {
+                mode: 'adaptive',
+                rateLimiter: {
+                    requestsPerMinute: RATE_LIMITS.lenovo.requestsPerMinute,
+                    requestsPerHour: RATE_LIMITS.lenovo.requestsPerHour
+                }
+            }),
+            hp: new IntelligentRateLimitingSystem('hp', {
+                mode: 'adaptive',
+                rateLimiter: {
+                    requestsPerMinute: RATE_LIMITS.hp.requestsPerMinute,
+                    requestsPerHour: RATE_LIMITS.hp.requestsPerHour
+                }
+            })
+        };
+        console.log('✅ Intelligent rate limiting systems initialized');
+    }
+    return window.warrantyDogRateLimiters;
+}
 
 // Legacy RateLimiter class (kept for backward compatibility)
 class RateLimiter {
@@ -110,7 +119,7 @@ class DellAPI {
     constructor() {
         this.baseUrl = 'https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5';
         this.rateLimiter = rateLimiters.dell; // Legacy rate limiter
-        this.intelligentRateLimiter = intelligentRateLimiters.dell; // New intelligent system
+        this.intelligentRateLimiter = getIntelligentRateLimiters().dell; // New intelligent system
         this.useIntelligentRateLimiting = true; // Enable intelligent rate limiting by default
     }
 
@@ -315,6 +324,85 @@ class DellAPI {
     }
 
     /**
+     * Organize warranties by type and priority for clear display
+     */
+    organizeWarranties(entitlements) {
+        if (!entitlements || entitlements.length === 0) {
+            return { primary: null, all: [], summary: 'No warranties found' };
+        }
+
+        // Sort warranties by priority and end date
+        const sortedWarranties = entitlements.sort((a, b) => {
+            // Priority order: Extended > Premium > Standard > Basic
+            const priorityOrder = {
+                'extended': 4,
+                'premium': 3,
+                'standard': 2,
+                'basic': 1,
+                'default': 0
+            };
+
+            const aPriority = this.getWarrantyPriority(a.serviceLevelDescription, priorityOrder);
+            const bPriority = this.getWarrantyPriority(b.serviceLevelDescription, priorityOrder);
+
+            if (aPriority !== bPriority) {
+                return bPriority - aPriority; // Higher priority first
+            }
+
+            // If same priority, sort by end date (latest first)
+            return new Date(b.endDate) - new Date(a.endDate);
+        });
+
+        // Find the most relevant warranty for primary display
+        const primary = sortedWarranties[0];
+
+        // Create a comprehensive summary
+        const warrantyTypes = [...new Set(sortedWarranties.map(w =>
+            this.cleanWarrantyType(w.serviceLevelDescription)
+        ))];
+
+        const summary = warrantyTypes.length > 1
+            ? `${warrantyTypes[0]} + ${warrantyTypes.length - 1} more`
+            : warrantyTypes[0] || 'Standard Warranty';
+
+        return {
+            primary: primary,
+            all: sortedWarranties,
+            summary: summary,
+            count: sortedWarranties.length
+        };
+    }
+
+    /**
+     * Get warranty priority for sorting
+     */
+    getWarrantyPriority(description, priorityOrder) {
+        if (!description) return 0;
+
+        const desc = description.toLowerCase();
+        for (const [key, priority] of Object.entries(priorityOrder)) {
+            if (desc.includes(key)) {
+                return priority;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Clean warranty type for display
+     */
+    cleanWarrantyType(description) {
+        if (!description) return 'Standard Warranty';
+
+        // Remove common prefixes/suffixes and clean up
+        return description
+            .replace(/^(Dell\s+)?/i, '')
+            .replace(/\s+(Warranty|Service|Support)$/i, '')
+            .replace(/\s+/g, ' ')
+            .trim() || 'Standard Warranty';
+    }
+
+    /**
      * Parse Dell API warranty response into standardized format
      */
     parseWarrantyResponse(data, serviceTag) {
@@ -334,6 +422,9 @@ class DellAPI {
                 } else if (data._metadata) {
                     // Response with metadata wrapper - extract the actual data
                     const { _metadata, ...actualData } = data;
+                    console.log(`[DEBUG] After removing metadata for ${serviceTag}:`, actualData);
+                    console.log(`[DEBUG] ActualData keys:`, Object.keys(actualData));
+
                     // Check if the remaining data is an array or has nested structure
                     if (Array.isArray(actualData)) {
                         devices = actualData;
@@ -342,12 +433,20 @@ class DellAPI {
                     } else if (actualData.entitlements) {
                         devices = [actualData];
                     } else {
-                        // Check if any property is an array (common Dell API pattern)
-                        const arrayProps = Object.values(actualData).filter(val => Array.isArray(val));
-                        if (arrayProps.length > 0) {
-                            devices = arrayProps[0]; // Use the first array found
+                        // Dell API often uses numeric keys like "0", "1", etc.
+                        const numericKeys = Object.keys(actualData).filter(key => !isNaN(key));
+                        if (numericKeys.length > 0) {
+                            // Extract devices from numeric keys
+                            devices = numericKeys.map(key => actualData[key]);
+                            console.log(`[DEBUG] Extracted from numeric keys for ${serviceTag}:`, devices);
                         } else {
-                            devices = [actualData]; // Treat as single device
+                            // Check if any property is an array (common Dell API pattern)
+                            const arrayProps = Object.values(actualData).filter(val => Array.isArray(val));
+                            if (arrayProps.length > 0) {
+                                devices = arrayProps[0]; // Use the first array found
+                            } else {
+                                devices = [actualData]; // Treat as single device
+                            }
                         }
                     }
                 } else {
@@ -376,20 +475,23 @@ class DellAPI {
             // Get the first device from the array or use the single device
             const device = Array.isArray(devices) ? devices[0] : devices;
             console.log(`[DEBUG] Processing device for ${serviceTag}:`, device);
+            console.log(`[DEBUG] Device keys:`, Object.keys(device));
+            console.log(`[DEBUG] Device entitlements property:`, device.entitlements);
 
             const entitlements = device.entitlements || [];
             console.log(`[DEBUG] Entitlements for ${serviceTag}:`, entitlements.length, entitlements);
 
-            // Find the primary warranty (usually the longest or most comprehensive)
-            const primaryWarranty = entitlements.reduce((primary, current) => {
-                if (!primary) return current;
+            // Additional debugging for entitlements extraction
+            if (entitlements.length === 0 && device.entitlements) {
+                console.log(`[DEBUG] Entitlements exist but length is 0. Raw entitlements:`, device.entitlements);
+            }
 
-                const currentEnd = new Date(current.endDate);
-                const primaryEnd = new Date(primary.endDate);
+            // Organize warranties by type and priority
+            const warrantyHierarchy = this.organizeWarranties(entitlements);
+            console.log(`[DEBUG] Organized warranties for ${serviceTag}:`, warrantyHierarchy);
 
-                return currentEnd > primaryEnd ? current : primary;
-            }, null);
-
+            // Find the primary warranty (most relevant for display)
+            const primaryWarranty = warrantyHierarchy.primary;
             console.log(`[DEBUG] Primary warranty for ${serviceTag}:`, primaryWarranty);
 
             if (!primaryWarranty) {
@@ -418,7 +520,8 @@ class DellAPI {
                 serviceTag: serviceTag,
                 vendor: 'Dell',
                 status: isActive ? 'active' : 'expired',
-                warrantyType: primaryWarranty.serviceLevelDescription || 'Standard Warranty',
+                warrantyType: warrantyHierarchy.summary, // Use comprehensive summary
+                primaryWarrantyType: this.cleanWarrantyType(primaryWarranty.serviceLevelDescription),
                 startDate: startDate.toISOString().split('T')[0],
                 endDate: endDate.toISOString().split('T')[0],
                 daysRemaining: daysRemaining,
@@ -429,11 +532,14 @@ class DellAPI {
                 message: isActive ?
                     `Active warranty - ${daysRemaining} days remaining` :
                     `Warranty expired ${daysExpired} days ago`,
-                allEntitlements: entitlements.map(ent => ({
-                    type: ent.serviceLevelDescription,
+                warrantyCount: warrantyHierarchy.count,
+                warrantyDetails: warrantyHierarchy.all.map(ent => ({
+                    type: this.cleanWarrantyType(ent.serviceLevelDescription),
+                    fullType: ent.serviceLevelDescription,
                     startDate: ent.startDate,
                     endDate: ent.endDate,
-                    entitlementType: ent.entitlementType
+                    entitlementType: ent.entitlementType,
+                    isActive: new Date(ent.endDate) > new Date()
                 }))
             };
 
@@ -450,17 +556,330 @@ class DellAPI {
 }
 
 /**
- * Lenovo API Implementation (Placeholder)
- * TODO: Implement Lenovo warranty API integration
+ * Lenovo Warranty API Implementation
+ * Uses Lenovo Support API v2.5 for warranty lookups
  */
 class LenovoAPI {
     constructor() {
-        this.baseUrl = 'https://support.lenovo.com/api'; // Placeholder URL
+        this.baseUrl = 'https://supportapi.lenovo.com/v2.5';
         this.rateLimiter = rateLimiters.lenovo;
+        this.useIntelligentRateLimiting = true;
+        this.intelligentRateLimiter = getIntelligentRateLimiters().lenovo;
     }
 
+    /**
+     * Lookup warranty information for a Lenovo serial number
+     * @param {string} serialNumber - Lenovo serial number
+     * @returns {Promise<Object>} Warranty information
+     */
     async lookupWarranty(serialNumber) {
-        throw new Error('Lenovo API integration not yet implemented. Coming soon!');
+        console.log(`Looking up Lenovo warranty for serial number: ${serialNumber}`);
+
+        // Use intelligent rate limiting system if enabled
+        if (this.useIntelligentRateLimiting) {
+            return await this.intelligentRateLimiter.executeRequest(
+                () => this.performLenovoWarrantyLookup(serialNumber),
+                `lenovo_warranty_${serialNumber}`
+            );
+        } else {
+            // Fallback to legacy rate limiting
+            await this.rateLimiter.waitForSlot();
+            return await this.performLenovoWarrantyLookup(serialNumber);
+        }
+    }
+
+    /**
+     * Perform the actual Lenovo warranty lookup
+     */
+    async performLenovoWarrantyLookup(serialNumber) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            throw new Error('Lenovo API key not configured. Please configure your API key in settings.');
+        }
+
+        // Use backend proxy to avoid CORS issues
+        const proxyUrl = `/api/lenovo/warranty`;
+
+        console.log(`Making Lenovo API request via proxy: ${proxyUrl}`);
+
+        try {
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Lenovo-Client-ID': apiKey
+                },
+                body: JSON.stringify({
+                    Serial: serialNumber
+                })
+            });
+
+            console.log(`Lenovo API Response Status: ${response.status}`);
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+
+                if (response.status === 401) {
+                    throw new Error('Lenovo API authentication failed. Please check your ClientID.');
+                } else if (response.status === 429) {
+                    throw new Error('Lenovo API rate limit exceeded. Please try again later.');
+                } else if (response.status === 404) {
+                    throw new Error('Serial number not found in Lenovo database.');
+                } else {
+                    throw new Error(`Lenovo API error: ${response.status} - ${errorData.message || response.statusText}`);
+                }
+            }
+
+            const data = await response.json();
+            console.log(`Lenovo API Response Data:`, data);
+
+            return this.parseLenovoWarrantyResponse(data, serialNumber);
+
+        } catch (error) {
+            console.error(`Lenovo API lookup failed for ${serialNumber}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Parse Lenovo warranty response into standardized format
+     */
+    parseLenovoWarrantyResponse(data, serialNumber) {
+        try {
+            // Handle error codes in response
+            if (data.ErrorCode) {
+                if (data.ErrorCode === 100) {
+                    return {
+                        vendor: 'Lenovo',
+                        serviceTag: serialNumber,
+                        status: 'no_warranty',
+                        message: 'Warranty data not found',
+                        isActive: false
+                    };
+                } else if (data.ErrorCode === 101) {
+                    throw new Error('Multiple records found. Please specify SN.MT instead of SN');
+                } else {
+                    throw new Error(`Lenovo API error: ${data.ErrorCode} - ${data.ErrorMessage || 'Unknown error'}`);
+                }
+            }
+
+            // Extract basic information
+            const product = data.Product || 'Unknown';
+            const inWarranty = data.InWarranty || false;
+            const purchased = data.Purchased ? new Date(data.Purchased) : null;
+            const shipped = data.Shipped ? new Date(data.Shipped) : null;
+            const country = data.Country || '';
+
+            // Process warranty information
+            const warranties = data.Warranty || [];
+            let primaryWarranty = null;
+            let warrantyEndDate = null;
+            let warrantyType = 'Unknown';
+
+            if (warranties.length > 0) {
+                // Find the primary/base warranty or the one with the latest end date
+                primaryWarranty = warranties.find(w => w.Type === 'BASE') || warranties[0];
+
+                if (primaryWarranty) {
+                    warrantyType = primaryWarranty.Name || primaryWarranty.Description || 'Standard Warranty';
+                    warrantyEndDate = primaryWarranty.End ? new Date(primaryWarranty.End) : null;
+                }
+            }
+
+            // Calculate warranty status and days remaining
+            let status = 'no_warranty';
+            let daysRemaining = null;
+            let isActive = false;
+
+            if (inWarranty && warrantyEndDate) {
+                const now = new Date();
+                const timeDiff = warrantyEndDate.getTime() - now.getTime();
+                daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+                if (daysRemaining > 0) {
+                    status = 'active';
+                    isActive = true;
+                } else {
+                    status = 'expired';
+                    isActive = false;
+                }
+            } else if (warrantyEndDate) {
+                const now = new Date();
+                const timeDiff = warrantyEndDate.getTime() - now.getTime();
+                daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+                if (daysRemaining <= 0) {
+                    status = 'expired';
+                    isActive = false;
+                }
+            }
+
+            return {
+                vendor: 'Lenovo',
+                serviceTag: serialNumber,
+                status: status,
+                warrantyType: warrantyType,
+                startDate: primaryWarranty?.Start || shipped?.toISOString() || null,
+                endDate: warrantyEndDate?.toISOString() || null,
+                shipDate: shipped?.toISOString() || null,
+                daysRemaining: daysRemaining,
+                isActive: isActive,
+                message: inWarranty ? 'Warranty information found' : 'No active warranty',
+                model: product,
+                country: country,
+                purchaseDate: purchased?.toISOString() || null,
+                upgradeUrl: data.UpgradeUrl || null,
+                allWarranties: warranties.map(w => ({
+                    id: w.ID,
+                    name: w.Name,
+                    description: w.Description,
+                    type: w.Type,
+                    start: w.Start,
+                    end: w.End
+                })),
+                contracts: data.Contract || []
+            };
+
+        } catch (error) {
+            console.error('Error parsing Lenovo warranty response:', error);
+            throw new Error(`Failed to parse Lenovo warranty data: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get Lenovo API key from localStorage
+     */
+    getApiKey() {
+        const apiKey = localStorage.getItem('lenovo_api_key') || '';
+        console.log('🔍 Lenovo API getApiKey() called:');
+        console.log('  Retrieved from localStorage:', apiKey ? `${apiKey.substring(0, 10)}...` : 'empty');
+        console.log('  Key length:', apiKey.length);
+        return apiKey;
+    }
+
+    /**
+     * Set Lenovo API key in localStorage
+     */
+    setApiKey(apiKey) {
+        if (apiKey && apiKey.trim()) {
+            localStorage.setItem('lenovo_api_key', apiKey.trim());
+            console.log('Lenovo API key saved successfully');
+        } else {
+            localStorage.removeItem('lenovo_api_key');
+            console.log('Lenovo API key removed');
+        }
+    }
+
+    /**
+     * Bulk warranty lookup for multiple serial numbers (Lenovo API supports this)
+     */
+    async lookupWarrantyBulk(serialNumbers) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            throw new Error('Lenovo API key not configured. Please configure your API key in settings.');
+        }
+
+        // Use backend proxy to avoid CORS issues
+        const proxyUrl = `/api/lenovo/warranty`;
+
+        console.log(`Making Lenovo bulk API request for ${serialNumbers.length} devices via proxy`);
+
+        try {
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Lenovo-Client-ID': apiKey
+                },
+                body: JSON.stringify({
+                    Serial: serialNumbers.join(',')
+                })
+            });
+
+            console.log(`Lenovo bulk API Response Status: ${response.status}`);
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error('Lenovo API authentication failed. Please check your ClientID.');
+                } else {
+                    throw new Error(`Lenovo API error: ${response.status} ${response.statusText}`);
+                }
+            }
+
+            const data = await response.json();
+            console.log(`Lenovo bulk API Response Data:`, data);
+
+            // Parse bulk response - Lenovo returns array for multiple devices
+            const results = new Map();
+
+            if (Array.isArray(data)) {
+                data.forEach(deviceData => {
+                    const serialNumber = deviceData.Serial || deviceData.ServiceTag;
+                    if (serialNumber) {
+                        results.set(serialNumber, this.parseLenovoWarrantyResponse(deviceData, serialNumber));
+                    }
+                });
+            } else {
+                // Single device response
+                const serialNumber = serialNumbers[0];
+                results.set(serialNumber, this.parseLenovoWarrantyResponse(data, serialNumber));
+            }
+
+            return results;
+
+        } catch (error) {
+            console.error(`Lenovo bulk API lookup failed:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Test Lenovo API connection with a sample serial number
+     */
+    async testConnection(testSerial = 'PF2ABCDE', allowWithoutKey = false) {
+        try {
+            if (allowWithoutKey && !this.getApiKey()) {
+                // Test endpoint connectivity without authentication via proxy
+                const proxyUrl = `/api/lenovo/warranty`;
+
+                const response = await fetch(proxyUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        Serial: testSerial
+                    })
+                });
+
+                if (response.status === 401) {
+                    return {
+                        success: true,
+                        message: 'API endpoint is reachable. Authentication required.',
+                        needsAuth: true
+                    };
+                } else {
+                    return {
+                        success: false,
+                        message: `Unexpected response: ${response.status}`,
+                        needsAuth: true
+                    };
+                }
+            }
+
+            const result = await this.lookupWarranty(testSerial);
+            return {
+                success: true,
+                message: 'Lenovo API connection successful',
+                data: result
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: `Lenovo API test failed: ${error.message}`,
+                error: error
+            };
+        }
     }
 }
 
@@ -623,7 +1042,7 @@ class WarrantyLookupService {
         const vendorLower = vendor.toLowerCase();
 
         // Try intelligent rate limiter first
-        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+        const intelligentRateLimiter = getIntelligentRateLimiters()[vendorLower];
         if (intelligentRateLimiter) {
             const status = intelligentRateLimiter.getSystemStatus();
             return {
@@ -669,7 +1088,7 @@ class WarrantyLookupService {
      */
     getAnalyticsDashboard(vendor) {
         const vendorLower = vendor.toLowerCase();
-        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+        const intelligentRateLimiter = getIntelligentRateLimiters()[vendorLower];
 
         if (intelligentRateLimiter) {
             return intelligentRateLimiter.analytics.getDashboardData();
@@ -683,7 +1102,7 @@ class WarrantyLookupService {
      */
     setRateLimitingMode(vendor, mode) {
         const vendorLower = vendor.toLowerCase();
-        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+        const intelligentRateLimiter = getIntelligentRateLimiters()[vendorLower];
 
         if (intelligentRateLimiter) {
             intelligentRateLimiter.setMode(mode);
@@ -696,7 +1115,7 @@ class WarrantyLookupService {
      */
     async processDevicesBatch(vendor, devices, processingOptions = {}) {
         const vendorLower = vendor.toLowerCase();
-        const intelligentRateLimiter = intelligentRateLimiters[vendorLower];
+        const intelligentRateLimiter = getIntelligentRateLimiters()[vendorLower];
 
         if (!intelligentRateLimiter) {
             throw new Error(`Intelligent rate limiter not available for vendor: ${vendor}`);

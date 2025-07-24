@@ -155,6 +155,225 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
     }
 });
 
+// Lenovo API proxy endpoint
+app.post('/api/lenovo/warranty', async (req, res) => {
+    try {
+        const { Serial } = req.body;
+        const clientId = req.headers['x-lenovo-client-id'];
+
+        console.log(`🔍 Lenovo API proxy request for serial: ${Serial}`);
+        console.log(`🔑 Using ClientID: ${clientId ? clientId.substring(0, 10) + '...' : 'not provided'}`);
+
+        if (!clientId) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: 'Lenovo ClientID is required'
+            });
+        }
+
+        if (!Serial) {
+            return res.status(400).json({
+                error: 'Bad request',
+                message: 'Serial number is required'
+            });
+        }
+
+        // Prepare form data for Lenovo API
+        const formData = new URLSearchParams();
+        formData.append('Serial', Serial);
+
+        console.log(`📡 Making request to Lenovo API...`);
+
+        // Make request to Lenovo API
+        const response = await fetch('https://supportapi.lenovo.com/v2.5/warranty', {
+            method: 'POST',
+            headers: {
+                'ClientID': clientId,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json',
+                'User-Agent': 'WarrantyDog/1.0'
+            },
+            body: formData
+        });
+
+        console.log(`📡 Lenovo API response status: ${response.status}`);
+
+        // Get response data
+        let responseData;
+        const contentType = response.headers.get('content-type');
+
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            const textData = await response.text();
+            console.log(`📄 Lenovo API text response: ${textData}`);
+            responseData = { message: textData };
+        }
+
+        console.log(`📊 Lenovo API response data:`, responseData);
+
+        // Return the response with proper status
+        res.status(response.status).json(responseData);
+
+    } catch (error) {
+        console.error('Lenovo API proxy error:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
+// Database migration endpoint for standardizing existing data
+app.post('/api/migrate-data', async (req, res) => {
+    try {
+        console.log('🔄 Starting database standardization migration...');
+
+        // Get all device data
+        const allData = dbService.db.prepare(`
+            SELECT * FROM devices
+            ORDER BY created_at DESC
+        `).all();
+
+        console.log(`📊 Found ${allData.length} records to migrate`);
+
+        let updated = 0;
+        const updateStmt = dbService.db.prepare(`
+            UPDATE devices
+            SET vendor = ?,
+                model = ?,
+                warranty_status = ?,
+                warranty_type = ?,
+                warranty_end_date = ?,
+                ship_date = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `);
+
+        // Standardization functions (server-side versions)
+        const standardizeVendor = (vendor) => {
+            if (!vendor) return '';
+            const vendorLower = vendor.toLowerCase();
+            if (vendorLower.includes('dell')) return 'Dell';
+            if (vendorLower.includes('lenovo')) return 'Lenovo';
+            if (vendorLower.includes('hp') || vendorLower.includes('hewlett')) return 'HP';
+            if (vendorLower.includes('microsoft')) return 'Microsoft';
+            if (vendorLower.includes('asus')) return 'ASUS';
+            if (vendorLower.includes('apple')) return 'Apple';
+            return vendor.charAt(0).toUpperCase() + vendor.slice(1).toLowerCase();
+        };
+
+        const standardizeModel = (model, vendor) => {
+            if (!model) return '';
+
+            // Clean up Lenovo's verbose model paths
+            if (vendor && vendor.toLowerCase().includes('lenovo')) {
+                const parts = model.split('/');
+                const lastPart = parts[parts.length - 1];
+
+                if (lastPart && lastPart.match(/^[A-Z0-9]+$/)) {
+                    return lastPart;
+                }
+
+                for (const part of parts) {
+                    if (part.includes('THINKPAD') || part.includes('THINKBOOK') || part.includes('THINKCENTRE')) {
+                        return part.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    }
+                    if (part.match(/^[0-9]{2}[A-Z]{2}$/)) {
+                        return part;
+                    }
+                }
+            }
+
+            // Clean up Dell models
+            if (vendor && vendor.toLowerCase().includes('dell')) {
+                return model.replace(/^DELL\s+/i, '').trim();
+            }
+
+            return model.trim();
+        };
+
+        const standardizeDate = (dateValue) => {
+            if (!dateValue) return null;
+            try {
+                const date = new Date(dateValue);
+                if (isNaN(date.getTime())) return null;
+                return date.toISOString().split('T')[0];
+            } catch (error) {
+                return null;
+            }
+        };
+
+        const standardizeStatus = (status) => {
+            if (!status) return 'Unknown';
+            const statusLower = status.toLowerCase();
+            if (statusLower.includes('active') || statusLower === 'active') return 'Active';
+            if (statusLower.includes('expired') || statusLower === 'expired') return 'Expired';
+            if (statusLower.includes('error') || statusLower === 'error') return 'Error';
+            if (statusLower.includes('skipped') || statusLower === 'skipped') return 'Skipped';
+            return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+        };
+
+        const standardizeBoolean = (value) => {
+            if (value === null || value === undefined) return 0;
+            if (typeof value === 'boolean') return value ? 1 : 0;
+            if (typeof value === 'string') {
+                const valueLower = value.toLowerCase();
+                return (valueLower === 'true' || valueLower === 'yes' || valueLower === '1') ? 1 : 0;
+            }
+            return value ? 1 : 0;
+        };
+
+        // Process each record
+        for (const record of allData) {
+            const standardizedVendor = standardizeVendor(record.vendor);
+            const standardizedModel = standardizeModel(record.model, standardizedVendor);
+            const standardizedStatus = standardizeStatus(record.warranty_status);
+            const standardizedEndDate = standardizeDate(record.warranty_end_date);
+            const standardizedShipDate = standardizeDate(record.ship_date);
+
+            // Clean up warranty type
+            let standardizedWarrantyType = record.warranty_type || '';
+            if (standardizedWarrantyType) {
+                standardizedWarrantyType = standardizedWarrantyType
+                    .replace(/\s+/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase())
+                    .trim();
+            }
+
+            // Update the record
+            updateStmt.run(
+                standardizedVendor,
+                standardizedModel,
+                standardizedStatus,
+                standardizedWarrantyType,
+                standardizedEndDate,
+                standardizedShipDate,
+                record.id
+            );
+
+            updated++;
+        }
+
+        console.log(`✅ Migration completed. Updated ${updated} records.`);
+
+        res.json({
+            success: true,
+            message: 'Database standardization completed',
+            updated: updated,
+            total: allData.length
+        });
+
+    } catch (error) {
+        console.error('❌ Database migration error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Migration failed',
+            message: error.message
+        });
+    }
+});
+
 // Get cached warranty data endpoint
 app.post('/api/cached-warranty', (req, res) => {
     try {
@@ -474,6 +693,84 @@ app.get('/api/database/stats', (req, res) => {
     }
 });
 
+// Device management endpoints
+app.get('/api/sessions/:sessionId/devices/:serialNumber', (req, res) => {
+    try {
+        const { sessionId, serialNumber } = req.params;
+        const device = dbService.findDeviceBySerial(sessionId, serialNumber);
+
+        if (!device) {
+            return res.status(404).json({ error: 'Device not found' });
+        }
+
+        res.json(device);
+    } catch (error) {
+        console.error('Error finding device by serial:', error);
+        res.status(500).json({ error: 'Failed to find device' });
+    }
+});
+
+app.put('/api/devices/:deviceId/state', (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const stateData = req.body;
+
+        const result = dbService.updateDeviceState(deviceId, stateData);
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Error updating device state:', error);
+        res.status(500).json({ error: 'Failed to update device state' });
+    }
+});
+
+// Warranty data endpoints
+app.get('/api/warranty-data/:serviceTag', (req, res) => {
+    try {
+        const { serviceTag } = req.params;
+        const { vendor } = req.query;
+
+        const warrantyData = dbService.getWarrantyData(serviceTag, vendor);
+
+        if (!warrantyData) {
+            return res.status(404).json({ error: 'Warranty data not found' });
+        }
+
+        res.json(warrantyData);
+    } catch (error) {
+        console.error('Error getting warranty data:', error);
+        res.status(500).json({ error: 'Failed to get warranty data' });
+    }
+});
+
+app.post('/api/warranty-data', (req, res) => {
+    try {
+        const warrantyData = req.body;
+
+        const result = dbService.storeWarrantyData(warrantyData);
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Error storing warranty data:', error);
+        res.status(500).json({ error: 'Failed to store warranty data' });
+    }
+});
+
+// Bulk warranty data endpoint
+app.post('/api/warranty-data/bulk', (req, res) => {
+    try {
+        const { devices } = req.body;
+
+        if (!devices || !Array.isArray(devices)) {
+            return res.status(400).json({ error: 'Invalid devices array' });
+        }
+
+        const bulkData = dbService.getBulkWarrantyData(devices);
+        res.json(bulkData);
+    } catch (error) {
+        console.error('Error getting bulk warranty data:', error);
+        res.status(500).json({ error: 'Failed to get bulk warranty data' });
+    }
+});
+
 // Database cleanup endpoints
 app.get('/api/database/cleanup/recommendations', (req, res) => {
     try {
@@ -517,6 +814,7 @@ async function startServer() {
         app.listen(PORT, () => {
             console.log(`🐕 WarrantyDog API proxy server running on port ${PORT}`);
             console.log(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);
+            console.log(`📡 Lenovo API proxy available at: http://localhost:${PORT}/api/lenovo/warranty`);
             console.log(`🌐 Web interface available at: http://localhost:${PORT}`);
             console.log(`💾 Database: SQLite with persistent session management`);
         });
