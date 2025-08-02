@@ -5,8 +5,7 @@
   "main": "index.html",
   "type": "module",
   "scripts": {
-    "dev": "live-server --port=8080 --host=0.0.0.0 --no-browser --watch=.",
-    "serve": "http-server -p 8080 -a 0.0.0.0 -c-1",
+    "dev": "vite --port=8080 --host=0.0.0.0",
     "server": "node server.js",
     "dev-server": "nodemon server.js",
     "start": "npm run dev",
@@ -48,10 +47,9 @@
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "eslint": "^8.57.0",
-    "http-server": "^14.1.1",
-    "live-server": "^1.2.2",
     "nodemon": "^3.1.10",
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "vite": "^5.4.19"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
