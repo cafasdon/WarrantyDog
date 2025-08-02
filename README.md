@@ -1,36 +1,46 @@
 
 # WarrantyDog 🐕
 
-A browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs. **Now with full Dell OAuth 2.0 support and backend proxy for CORS-free API calls!**
+**A modern, browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs.**
 
-## ✅ **FULLY WORKING PROGRAM STATUS**
+✅ **Production Ready** | 🐳 **Docker Containerized** | 🔒 **Secure OAuth 2.0** | 🚀 **Modern Stack**
 
-**Current Status**: ✅ **Production Ready with Dell API Integration**
+---
 
-### 🎉 **What's Working**
-- ✅ **Dell OAuth 2.0 Authentication**: Full implementation of Dell's required OAuth 2.0 flow
-- ✅ **Backend Proxy Server**: Express.js server eliminates CORS issues
-- ✅ **CSV Processing**: Upload, parse, and process device lists
-- ✅ **Smart Vendor Skipping**: Prevents API quota waste on unconfigured vendors
-- ✅ **Real-time Progress**: Live tracking with cancel functionality
-- ✅ **Persistent Statistics**: Device breakdown stays visible until dismissed
-- ✅ **Export Functionality**: Complete CSV export with warranty data
-- ✅ **Professional UX**: Mock validation, error handling, and user feedback
+## 🎯 **What is WarrantyDog?**
 
-### 🔧 **Technical Implementation**
-- **Frontend**: Vanilla JavaScript with comprehensive error handling
-- **Backend**: Node.js/Express proxy server for OAuth 2.0 token management
-- **Authentication**: Dell OAuth 2.0 with API Key + Secret → Bearer token flow
-- **CORS Solution**: Backend proxy eliminates browser CORS limitations
-- **Data Processing**: CSV parsing with vendor detection and smart filtering
+WarrantyDog is a complete warranty management solution that:
+- **Processes CSV files** with device information
+- **Fetches warranty data** from vendor APIs (Dell, Lenovo, HP)
+- **Provides real-time progress** tracking with cancellation
+- **Exports complete results** to CSV
+- **Runs anywhere** with Docker containerization
 
-## 🚀 Quick Start with Docker (Immediate Web Access)
+### ✨ **Key Features**
+- ✅ **Dell OAuth 2.0 Integration**: Full API authentication with rate limiting
+- ✅ **Lenovo API Support**: Complete warranty lookup functionality
+- ✅ **Smart Processing**: Skips unconfigured vendors to save API quotas
+- ✅ **Modern Development**: Vite dev server, secure dependencies
+- ✅ **Docker Ready**: One-command deployment anywhere
+- ✅ **Data Persistence**: SQLite database with session management
+- ✅ **Professional UX**: Real-time updates, error handling, export functionality
 
-### Prerequisites
-- Docker Desktop installed and running
-- Git
+### 🏗️ **Architecture**
+- **Frontend**: Modern JavaScript with Vite development server
+- **Backend**: Node.js/Express API proxy with OAuth 2.0 token management
+- **Database**: SQLite for session persistence and caching
+- **Deployment**: Docker containerization for consistent environments
+- **Security**: Fixed all high/medium vulnerabilities, modern dependency stack
 
-### 🎯 **Instant Start (Recommended)**
+---
+
+## 🚀 **Quick Start Guide**
+
+### 📋 **Prerequisites**
+- **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
+- **Git** installed ([Download here](https://git-scm.com/downloads))
+
+### 🎯 **Option 1: One-Command Start (Recommended)**
 
 **Windows:**
 ```cmd
@@ -47,276 +57,487 @@ chmod +x start-warrantydog.sh
 ./start-warrantydog.sh
 ```
 
-**Manual Docker Compose:**
+**That's it!** The application will be available at **http://localhost:3001**
+
+### 🐳 **Option 2: Manual Docker Commands**
+
 ```bash
-# Production mode (immediate web access)
-docker-compose up --build -d
-
-# Development mode (with live reload)
-docker-compose --profile dev up --build -d
-```
-
-### 🌐 **Access Points**
-- **Web Interface**: http://localhost:3001 (immediately available)
-- **Health Check**: http://localhost:3001/api/health
-- **Development**: http://localhost:3002 (if using dev profile)
-
-## 🚀 **Quick Start with Backend Server (Recommended)**
-
-For the full working experience with Dell API integration:
-
-### Prerequisites
-- Node.js 16+ installed
-- Dell API credentials (Key + Secret) from [Dell TechDirect](https://techdirect.dell.com/portal/AboutAPIs.aspx)
-
-### Setup and Run
-```bash
+# Clone and enter directory
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
-npm install
-npm run server
-```
 
-Then open **http://localhost:3001** in your browser.
+# Start the application
+docker-compose up --build -d
 
-### What You Get
-- ✅ **Full Dell API Integration** with OAuth 2.0
-- ✅ **No CORS Issues** - backend proxy handles all API calls
-- ✅ **Real Warranty Data** - actual Dell warranty lookups
-- ✅ **Professional UX** - complete feature set
+# Check status
+docker-compose ps
 
-## 🐳 Docker Development Environment
+# View logs
+docker-compose logs -f
 
-WarrantyDog uses Docker for consistent development across all platforms.
-
-### Available Commands
-
-```bash
-# Setup and Management
-make setup          # Initial setup
-make start          # Start development environment
-make stop           # Stop development environment
-make restart        # Restart everything
-make clean          # Clean up containers and volumes
-
-# Development
-make shell          # Enter development container
-make dev            # Start development server
-make logs           # View container logs
-
-# Code Quality
-make test           # Run tests
-make lint           # Run linter
-make format         # Format code
-
-# Help
-make help           # Show all commands
-```
-
-### Manual Docker Commands
-
-```bash
-# Build and start
-docker-compose build
-docker-compose up -d
-
-# Enter container
-docker-compose exec warrantydog-dev bash
-
-# Start development server
-docker-compose exec warrantydog-dev npm run dev
-
-# Stop everything
+# Stop when done
 docker-compose down
 ```
 
-## 📋 CSV Format
+### 🌐 **Access Your Application**
+- **Main Application**: http://localhost:3001
+- **Health Check**: http://localhost:3001/api/health
+- **API Documentation**: http://localhost:3001/api/
 
-Your input CSV must contain these columns:
-- `vendor` - Vendor name (Dell, Lenovo, HP, etc.)
+### ✅ **Verify Installation**
+1. Open http://localhost:3001 in your browser
+2. You should see the WarrantyDog interface
+3. Click "⚙️ Configure APIs" to set up vendor credentials
+4. Upload a CSV file to test functionality
+
+---
+
+## 🛠️ **Development Setup**
+
+### 🎯 **Option 3: Local Development (For Developers)**
+
+**Prerequisites:**
+- Node.js 16+ ([Download here](https://nodejs.org/))
+- npm (comes with Node.js)
+
+**Setup:**
+```bash
+# Clone repository
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
+
+# Install dependencies
+npm install
+
+# Start backend server (production)
+npm run server
+
+# OR start development server with hot reload
+npm run dev-server
+
+# OR start frontend development server
+npm run dev
+```
+
+**Access Points:**
+- **Backend + Frontend**: http://localhost:3001 (production)
+- **Frontend Only**: http://localhost:8080 (development)
+- **Backend API**: http://localhost:3001/api/
+
+### 🔧 **Development Commands**
+```bash
+npm run dev          # Start Vite development server (port 8080)
+npm run server       # Start backend API server (port 3001)
+npm run dev-server   # Start backend with auto-restart
+npm run lint         # Check code quality
+npm run format       # Format code with Prettier
+npm run validate     # Run lint + format
+```
+
+---
+
+## 📋 **How to Use WarrantyDog**
+
+### 📁 **Step 1: Prepare Your CSV File**
+
+Create a CSV file with your device information:
+
+**Required columns:**
+- `vendor` - Device manufacturer (Dell, Lenovo, HP, etc.)
 - `serial` - Device serial number
 
-Optional columns:
-- `model` - Device model
+**Optional columns:**
+- `model` - Device model name
 - `location` - Device location
 
-Example:
+**Example CSV:**
 ```csv
 vendor,serial,model,location
 Dell,ABCD123,OptiPlex 7090,Office-Floor1
-Lenovo,XYZ789,ThinkPad X1,Office-Floor2
-HP,DEF456,EliteBook 840,Remote-User1
+Dell,EFGH456,Latitude 5520,Remote-User1
+Lenovo,IJKL789,ThinkPad X1,Office-Floor2
+HP,MNOP012,EliteBook 840,Remote-User2
 ```
 
-## ⚙️ Configuration
+### 🔑 **Step 2: Configure API Credentials**
 
-### API Keys
+1. **Get Dell API Credentials** (if checking Dell devices):
+   - Visit [Dell TechDirect API Portal](https://techdirect.dell.com/portal/AboutAPIs.aspx)
+   - Request API access through your Dell account
+   - You'll receive both an **API Key** and **API Secret**
 
-Configure API keys through the web interface:
-1. Click "⚙️ Configure APIs" in the app
-2. Enter your Dell API key
-3. Click "Save"
+2. **Get Lenovo API Credentials** (if checking Lenovo devices):
+   - Visit [Lenovo Support API Portal](https://supportapi.lenovo.com/documentation/)
+   - Request API access and get your **Client ID**
 
-Or via browser console:
-```javascript
-localStorage.setItem('dell_api_key', 'your_dell_api_key_here');
+3. **Configure in WarrantyDog**:
+   - Open http://localhost:3001
+   - Click "⚙️ Configure APIs"
+   - Enter your credentials
+   - Click "🧪 Test API Connection" to verify
+   - Save your configuration
+
+### 📤 **Step 3: Process Your Devices**
+
+1. **Upload CSV**: Click "Choose File" and select your CSV
+2. **Review Data**: Verify the device list is parsed correctly
+3. **Start Processing**: Click "🔍 Check Warranties"
+4. **Monitor Progress**: Watch real-time progress with cancel option
+5. **Export Results**: Click "📥 Export CSV" when complete
+
+### 📊 **Step 4: Review Results**
+
+Your results will include:
+- ✅ **Warranty Status**: Active, Expired, or Error
+- 📅 **Warranty End Date**: When coverage expires
+- 🏷️ **Warranty Type**: Service level details
+- 📦 **Ship Date**: Original device ship date
+- 🏭 **Vendor**: Standardized vendor name
+- 📱 **Model**: Cleaned device model information
+
+---
+
+## 🔧 **Supported Vendors & APIs**
+
+| Vendor | Status | Authentication | Rate Limits | Documentation |
+|--------|--------|----------------|-------------|---------------|
+| **Dell** | ✅ **Fully Working** | OAuth 2.0 (Key + Secret) | 1000/day | [Dell TechDirect API](https://techdirect.dell.com/portal/AboutAPIs.aspx) |
+| **Lenovo** | ✅ **Fully Working** | Client ID | 1000/day | [Lenovo Support API](https://supportapi.lenovo.com/documentation/) |
+| **HP** | 🚧 **Planned** | TBD | TBD | [HP Developer Portal](https://developers.hp.com/) |
+
+### 🔑 **API Configuration Details**
+
+**Dell API Setup:**
+1. **Register**: Create account at [Dell TechDirect](https://techdirect.dell.com/)
+2. **Request Access**: Apply for API access through your account
+3. **Get Credentials**: You'll receive:
+   - **API Key**: Your unique identifier
+   - **API Secret**: Required for OAuth 2.0 (mandatory since Dec 2019)
+4. **Configure**: Enter both in WarrantyDog's API configuration
+
+**Lenovo API Setup:**
+1. **Register**: Create account at [Lenovo Support API Portal](https://supportapi.lenovo.com/)
+2. **Request Access**: Apply for API access
+3. **Get Client ID**: You'll receive a Client ID for authentication
+4. **Configure**: Enter Client ID in WarrantyDog's API configuration
+
+### 🔒 **Authentication Flow**
+```
+WarrantyDog Frontend → Express Backend → Vendor OAuth → API Token → Warranty Data
 ```
 
-### Supported Vendors
+**Why Backend Proxy?**
+- ✅ **Eliminates CORS issues** that block browser API calls
+- ✅ **Secures API credentials** (never exposed to frontend)
+- ✅ **Handles OAuth flows** automatically
+- ✅ **Implements rate limiting** to prevent quota exhaustion
+- ✅ **Caches responses** to improve performance
 
-| Vendor | Status | API Documentation | CORS Support |
-|--------|--------|-------------------|--------------|
-| Dell | ✅ Implemented | [Dell API Docs](https://www.dell.com/support/kbdoc/en-us/000177999) | ✅ Yes |
-| Lenovo | 🚧 Planned | [Lenovo API Docs](https://support.lenovo.com/us/en/api-doc) | ❓ TBD |
-| HP | 🚧 Planned | [HP API Docs](https://developers.hp.com/) | ❓ TBD |
+---
 
-## 🏗️ Architecture
+## 🏗️ **Technical Architecture**
 
+### 📁 **Project Structure**
 ```
 WarrantyDog/
-├── index.html              # Main app with modal config
-├── app.js                  # Core logic with WarrantyChecker class
-├── vendorApis.js           # API implementations + rate limiting
-├── style.css               # Responsive styling
-├── package.json            # Node.js config with dev scripts
-├── Dockerfile              # Alpine-based dev container
-├── docker-compose.yml      # Container orchestration
-├── Makefile               # Development commands
-├── .gitignore             # Comprehensive exclusions
-├── scripts/
-│   ├── complete-setup.sh   # One-command setup
-│   ├── docker-dev.sh       # Container management
-│   └── dev-setup.sh        # Internal setup
-├── docs/                   # Complete documentation
-├── examples/               # Sample CSV files
-└── lib/                    # PapaParse library
+├── 🌐 Frontend
+│   ├── index.html              # Main application interface
+│   ├── app.js                  # Core WarrantyChecker logic
+│   ├── vendorApis.js           # API client implementations
+│   ├── style.css               # Responsive UI styling
+│   └── lib/papaparse.min.js    # CSV parsing library
+│
+├── 🖥️ Backend
+│   ├── server.js               # Express API proxy server
+│   ├── database/               # SQLite database services
+│   │   └── DatabaseService.js  # Session & cache management
+│   └── data/                   # SQLite database files
+│
+├── 🐳 Docker
+│   ├── Dockerfile              # Container definition
+│   ├── docker-compose.yml      # Development orchestration
+│   ├── docker-compose.prod.yml # Production configuration
+│   └── docker-entrypoint.sh    # Container startup script
+│
+├── 🛠️ Development
+│   ├── package.json            # Dependencies & scripts
+│   ├── vite.config.js          # Modern dev server config
+│   ├── start-warrantydog.*     # Quick start scripts
+│   └── scripts/                # Setup & deployment tools
+│
+└── 📚 Documentation
+    ├── README.md               # This file
+    ├── examples/               # Sample CSV files
+    └── docs/                   # Additional documentation
 ```
 
-## 🧪 Testing
+### 🔄 **Data Flow**
+1. **CSV Upload** → Frontend parses with PapaParse
+2. **Device Processing** → Backend API calls with OAuth
+3. **Warranty Lookup** → Vendor APIs (Dell, Lenovo)
+4. **Data Storage** → SQLite database for caching
+5. **Results Export** → CSV download with warranty data
 
-### Automated Testing
+### 🛡️ **Security Features**
+- ✅ **No client-side API keys** - all credentials secured in backend
+- ✅ **OAuth 2.0 implementation** - proper vendor authentication
+- ✅ **CORS protection** - backend proxy eliminates browser restrictions
+- ✅ **Rate limiting** - prevents API quota exhaustion
+- ✅ **Input validation** - sanitized CSV processing
+- ✅ **Modern dependencies** - all security vulnerabilities fixed
+
+---
+
+## 🧪 **Testing & Validation**
+
+### 🔍 **Quick Test**
+1. **Start Application**: `docker-compose up -d`
+2. **Open Browser**: http://localhost:3001
+3. **Health Check**: http://localhost:3001/api/health should return `{"status":"ok"}`
+4. **Upload Sample**: Use `examples/sample-devices.csv`
+5. **Configure APIs**: Add your vendor credentials
+6. **Process Devices**: Click "🔍 Check Warranties"
+7. **Export Results**: Verify CSV export works
+
+### 📊 **Sample Data Files**
+- `examples/sample-devices.csv` - Mixed vendor test data
+- `examples/test-dell.csv` - Dell-specific devices
+- `examples/test-lenovo.csv` - Lenovo-specific devices
+
+### 🔧 **Development Testing**
 ```bash
-make test
+# Run code quality checks
+npm run lint          # ESLint code analysis
+npm run format        # Prettier code formatting
+npm run validate      # Run both lint + format
+
+# Test different environments
+npm run dev           # Frontend development server
+npm run server        # Backend production server
+npm run dev-server    # Backend development server
 ```
 
-### Manual Testing
-1. Start the development server
-2. Upload `examples/sample-devices.csv`
-3. Configure Dell API key
-4. Verify warranty data is fetched
-5. Export results and verify CSV format
+---
 
-### Sample Data
-- `examples/sample-devices.csv` - Mixed vendor sample
-- `examples/test-dell.csv` - Dell-specific test data
+## 🚀 **Deployment Options**
 
-## 🚀 Deployment
+### 🐳 **Docker Deployment (Recommended)**
 
-### Static Hosting
-The application is pure HTML/CSS/JavaScript and can be deployed to any static host:
-
+**Production deployment with Docker:**
 ```bash
-# Build production files
-make format
-make lint
+# Clone repository
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
 
-# Deploy files to your hosting platform
-# - GitHub Pages
-# - Netlify
-# - Vercel
-# - AWS S3 + CloudFront
+# Deploy with production configuration
+docker-compose -f docker-compose.prod.yml up -d
+
+# Or use the convenience script
+./start-warrantydog.sh
 ```
 
-### Environment Variables
-No server-side environment variables needed. All configuration is client-side.
+**Benefits:**
+- ✅ **Consistent environment** across all platforms
+- ✅ **No dependency conflicts** - everything containerized
+- ✅ **Easy scaling** - Docker orchestration ready
+- ✅ **Automatic restarts** - container health monitoring
+- ✅ **Data persistence** - SQLite database in Docker volumes
 
-## 🤝 Contributing
+### 🌐 **Traditional Server Deployment**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make changes in the Docker environment
-4. Test thoroughly
-5. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-## 📚 Documentation
-
-- [Development Guide](docs/development.md) - Docker setup and workflow
-- [API Documentation](docs/api.md) - Vendor API integration details
-- [Deployment Guide](docs/deployment.md) - Production deployment
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-
-## 🐛 Troubleshooting
-
-### Container Issues
+**For VPS/dedicated servers:**
 ```bash
-# Container won't start
-make clean
-make start
+# Install Node.js 16+ and npm
+# Clone and setup
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
+npm install --production
 
-# Permission issues
+# Start with process manager
+npm install -g pm2
+pm2 start server.js --name warrantydog
+pm2 startup
+pm2 save
+
+# Configure reverse proxy (nginx/apache)
+# Point to http://localhost:3001
+```
+
+### ☁️ **Cloud Deployment**
+
+**Platform-specific guides:**
+- **AWS**: Use ECS with Docker image
+- **Google Cloud**: Deploy to Cloud Run
+- **Azure**: Use Container Instances
+- **DigitalOcean**: App Platform with Docker
+- **Heroku**: Use container deployment
+
+---
+
+## 🛠️ **Troubleshooting**
+
+### 🐳 **Docker Issues**
+
+**Container won't start:**
+```bash
+# Check Docker is running
+docker info
+
+# Clean up and restart
+docker-compose down
+docker-compose up --build -d
+
+# Check logs
+docker-compose logs -f
+```
+
+**Port conflicts:**
+```bash
+# Check what's using port 3001
+netstat -tulpn | grep 3001
+
+# Stop conflicting services or change port in docker-compose.yml
+```
+
+**Permission issues (Linux/Mac):**
+```bash
 sudo chown -R $USER:$USER .
-
-# Port conflicts
-make stop
-make start
+chmod +x start-warrantydog.sh
 ```
 
-### API Issues
+### 🔑 **API Issues**
+
+**Dell API authentication fails:**
+1. Verify you have both API Key AND API Secret
+2. Check credentials at [Dell TechDirect Portal](https://techdirect.dell.com/portal/AboutAPIs.aspx)
+3. Test API connection in WarrantyDog interface
+4. Check browser console for detailed error messages
+
+**Lenovo API issues:**
+1. Verify Client ID is correct
+2. Check rate limits haven't been exceeded
+3. Ensure serial numbers are valid Lenovo format
+
+**CORS errors:**
+- ✅ **Should not occur** - backend proxy handles all API calls
+- If you see CORS errors, ensure backend server is running on port 3001
+
+### 🔧 **Development Issues**
+
+**npm install fails:**
 ```bash
-# Check API key configuration
-# Open browser console:
-localStorage.getItem('dell_api_key')
+# Clear npm cache
+npm cache clean --force
 
-# Test API directly
-# In browser console:
-fetch('https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements?servicetags=TEST123', {
-  headers: { 'X-Dell-Api-Key': 'your_key' }
-})
+# Delete node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
 ```
 
-## 🔐 **Dell API Configuration Guide**
+**Vite dev server issues:**
+```bash
+# Check port 8080 is available
+npm run dev -- --port 8081
 
-### Getting Dell API Credentials
-1. **Visit**: [Dell TechDirect API Portal](https://techdirect.dell.com/portal/AboutAPIs.aspx)
-2. **Request Access**: Apply for API access through your Dell account
-3. **Get Credentials**: You'll receive both:
-   - **API Key**: Your unique identifier
-   - **API Secret**: Required for OAuth 2.0 (since Dec 2019)
-
-### Configuring in WarrantyDog
-1. **Start Backend Server**: `npm run server`
-2. **Open Application**: http://localhost:3001
-3. **Configure APIs**: Click "⚙️ Configure APIs"
-4. **Enter Both Credentials**:
-   - Dell API Key: `your-api-key-here`
-   - Dell API Secret: `your-api-secret-here`
-5. **Test Connection**: Click "🧪 Test API Connection"
-6. **Save**: Both credentials are validated and saved
-
-### OAuth 2.0 Authentication Flow
-```
-Frontend → Backend → Dell OAuth → Bearer Token → Dell API → Warranty Data
+# Clear Vite cache
+rm -rf node_modules/.vite
 ```
 
-**Important**: Dell requires OAuth 2.0 authentication since December 2019. The old API key-only method no longer works.
+### 📊 **Data Issues**
 
-## 📝 License
+**CSV parsing fails:**
+- Ensure CSV has required columns: `vendor`, `serial`
+- Check for special characters or encoding issues
+- Verify CSV is properly formatted (commas, quotes)
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**No warranty data returned:**
+- Verify API credentials are configured
+- Check device serial numbers are valid
+- Ensure vendor names match supported vendors (Dell, Lenovo)
+- Check API rate limits haven't been exceeded
 
-## 🏷️ Version History
+---
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
+## 🤝 **Contributing**
+
+We welcome contributions! Here's how to get started:
+
+### 🔧 **Development Setup**
+```bash
+# Fork the repository on GitHub
+git clone https://github.com/YOUR-USERNAME/WarrantyDog.git
+cd WarrantyDog
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Start development environment
+docker-compose up -d
+# OR
+npm install && npm run dev-server
+```
+
+### 📝 **Making Changes**
+1. **Code Style**: Run `npm run validate` before committing
+2. **Testing**: Test your changes thoroughly
+3. **Documentation**: Update README if needed
+4. **Commit Messages**: Use clear, descriptive commit messages
+
+### 🚀 **Submitting Changes**
+```bash
+# Commit your changes
+git add .
+git commit -m "Add: your feature description"
+
+# Push to your fork
+git push origin feature/your-feature-name
+
+# Create a Pull Request on GitHub
+```
+
+---
+
+## 📚 **Additional Resources**
+
+### 🔗 **Useful Links**
+- **Dell API Documentation**: [TechDirect API Portal](https://techdirect.dell.com/portal/AboutAPIs.aspx)
+- **Lenovo API Documentation**: [Support API Portal](https://supportapi.lenovo.com/documentation/)
+- **Docker Documentation**: [Docker Docs](https://docs.docker.com/)
+- **Node.js Documentation**: [Node.js Docs](https://nodejs.org/docs/)
+
+### 📖 **Learning Resources**
+- **CSV Processing**: [PapaParse Documentation](https://www.papaparse.com/docs)
+- **Express.js**: [Express Guide](https://expressjs.com/en/guide/)
+- **SQLite**: [SQLite Documentation](https://sqlite.org/docs.html)
+- **Vite**: [Vite Guide](https://vitejs.dev/guide/)
+
+---
+
+## 📄 **License**
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+### 🏷️ **Version Information**
+- **Current Version**: 2.0.0
+- **Last Updated**: August 2025
+- **Node.js**: 16+ required
+- **Docker**: 20+ recommended
+
+---
+
+## 🎯 **Project Status**
+
+✅ **Production Ready** - Fully functional warranty checking system
+🔒 **Security Hardened** - All vulnerabilities fixed, modern dependencies
+🐳 **Docker Optimized** - One-command deployment anywhere
+🚀 **Modern Stack** - Vite, Express, SQLite, OAuth 2.0
+📊 **Enterprise Ready** - Session management, caching, rate limiting
 
 ---
 
 **Made with ❤️ for IT professionals who need warranty information fast.**
 
-**Development powered by Docker 🐳**
-
-# On GitHub, create a new private repository named "WarrantyDog"
+**Powered by Docker 🐳 | Secured with OAuth 2.0 🔒 | Built with Modern JavaScript ⚡**
 
 
 
