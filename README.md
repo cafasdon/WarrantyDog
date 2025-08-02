@@ -46,6 +46,9 @@ WarrantyDog is a complete warranty management solution that:
 ```cmd
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
+# Option 1: PowerShell (recommended)
+powershell -ExecutionPolicy Bypass -File start-warrantydog.ps1
+# Option 2: Command Prompt (if PowerShell unavailable)
 start-warrantydog.bat
 ```
 
