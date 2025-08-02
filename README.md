@@ -540,6 +540,47 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **Powered by Docker 🐳 | Secured with OAuth 2.0 🔒 | Built with Modern JavaScript ⚡**
 
+---
+
+## ⚠️ **Disclaimer & Development Notes**
+
+### 🤖 **AI-Assisted Development**
+This program was developed with significant assistance from **[Augment Code](https://augmentcode.com)**, an AI-powered coding assistant. The entire codebase was created through collaborative AI programming sessions, leveraging modern AI tools to accelerate development and ensure best practices.
+
+### 🎓 **Learning Project**
+**This is my first program built from scratch**, and as such, it likely contains flaws, inefficiencies, or areas for improvement. While the application is functional and has been tested, please be aware that:
+
+- 🔍 **Code quality may vary** - Some sections might not follow optimal patterns
+- 🐛 **Bugs may exist** - Thorough testing has been done, but edge cases may remain
+- 🔧 **Architecture decisions** - Some choices were made for learning purposes rather than enterprise optimization
+- 📚 **Documentation gaps** - Some areas might need better explanation or examples
+
+### 🤝 **Contributions Welcome**
+I **warmly welcome contributions** from the community! However, please understand that:
+
+- ⏰ **Review time** - I will need time to carefully review all contributions to understand the changes
+- 🎯 **Learning focus** - I want to understand every change to continue learning
+- 🔄 **Iterative improvement** - This project will evolve gradually during my off-time
+- 💬 **Discussion encouraged** - Feel free to open issues for questions or suggestions
+
+### 🚧 **Work in Progress**
+This project is **actively evolving** and will continue to improve as I:
+- 📖 Learn more about software development best practices
+- 🔧 Refactor and optimize existing code
+- ✨ Add new features and vendor support
+- 🛡️ Enhance security and error handling
+- 📝 Improve documentation and examples
+
+### 🙏 **Acknowledgments**
+Special thanks to:
+- **[Augment Code](https://augmentcode.com)** for providing the AI assistance that made this project possible
+- **The open-source community** for the excellent libraries and tools used in this project
+- **Dell and Lenovo** for providing public APIs that enable warranty checking functionality
+
+---
+
+*Built with curiosity, powered by AI, and improved through community collaboration.* 🚀
+
 
 
 
