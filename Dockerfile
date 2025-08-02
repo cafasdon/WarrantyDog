@@ -45,16 +45,17 @@ COPY --chown=developer:developer . .
 
 # Make scripts executable
 RUN chmod +x scripts/*.sh 2>/dev/null || true
+RUN chmod +x docker-entrypoint.sh start-warrantydog.sh 2>/dev/null || true
 
-# Expose development server port
-EXPOSE 8080
+# Expose WarrantyDog application port
+EXPOSE 3001
 
-# Default command
-CMD ["bash"]
+# Default command - start WarrantyDog application
+CMD ["./docker-entrypoint.sh"]
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
+# Health check for WarrantyDog application
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:3001/api/health || exit 1
 
 # Labels for metadata
 LABEL maintainer="WarrantyDog Development Team"

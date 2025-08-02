@@ -329,7 +329,7 @@ class DatabaseService {
     }
 
     /**
-     * Get warranty data for multiple devices in bulk
+     * Get warranty data for multiple devices in bulk - checks both api_responses and devices tables
      */
     getBulkWarrantyData(devices) {
         if (!devices || devices.length === 0) {
@@ -342,7 +342,56 @@ class DatabaseService {
         // Flatten the device array for the query parameters
         const params = devices.flatMap(device => [device.serviceTag, device.vendor]);
 
-        const stmt = this.db.prepare(`
+        const deviceMap = new Map();
+
+        // First, check the devices table for previously processed devices
+        const devicesStmt = this.db.prepare(`
+            SELECT
+                serial_number as service_tag,
+                vendor,
+                warranty_status,
+                warranty_type,
+                warranty_end_date,
+                warranty_days_remaining,
+                ship_date,
+                last_processed_at,
+                model
+            FROM devices
+            WHERE (serial_number, LOWER(vendor)) IN (VALUES ${devices.map(() => '(?, LOWER(?))').join(', ')})
+            AND processing_state = 'success'
+            AND warranty_status IS NOT NULL
+            ORDER BY last_processed_at DESC
+        `);
+
+        const deviceResults = devicesStmt.all(...params);
+        console.log(`📊 Found ${deviceResults.length} devices in devices table`);
+
+        // Process devices table results
+        deviceResults.forEach(row => {
+            const key = `${row.vendor}_${row.service_tag}`;
+
+            if (!deviceMap.has(key)) {
+                const warrantyData = {
+                    service_tag: row.service_tag,
+                    vendor: row.vendor,
+                    warranty_status: row.warranty_status,
+                    warranty_type: row.warranty_type,
+                    warranty_start_date: null, // Not stored in devices table
+                    warranty_end_date: row.warranty_end_date,
+                    ship_date: row.ship_date,
+                    warranty_days_remaining: row.warranty_days_remaining,
+                    is_active: row.warranty_status === 'active',
+                    message: 'Retrieved from devices table',
+                    model: row.model,
+                    response_timestamp: row.last_processed_at
+                };
+
+                deviceMap.set(key, warrantyData);
+            }
+        });
+
+        // Then, check the api_responses table for additional data
+        const apiStmt = this.db.prepare(`
             SELECT
                 service_tag,
                 vendor,
@@ -350,18 +399,17 @@ class DatabaseService {
                 response_timestamp,
                 parsing_status
             FROM api_responses
-            WHERE (service_tag, vendor) IN (VALUES ${placeholders})
+            WHERE (service_tag, LOWER(vendor)) IN (VALUES ${devices.map(() => '(?, LOWER(?))').join(', ')})
             AND parsing_status = 'success'
             AND parsed_data IS NOT NULL
             ORDER BY response_timestamp DESC
         `);
 
-        const results = stmt.all(...params);
+        const apiResults = apiStmt.all(...params);
+        console.log(`📊 Found ${apiResults.length} devices in api_responses table`);
 
-        // Parse and deduplicate results (keep most recent for each device)
-        const deviceMap = new Map();
-
-        results.forEach(row => {
+        // Process api_responses table results (only if not already found in devices table)
+        apiResults.forEach(row => {
             const key = `${row.vendor}_${row.service_tag}`;
 
             if (!deviceMap.has(key)) {
@@ -379,7 +427,7 @@ class DatabaseService {
                         ship_date: parsedData.shipDate,
                         warranty_days_remaining: parsedData.daysRemaining,
                         is_active: parsedData.isActive,
-                        message: parsedData.message,
+                        message: parsedData.message || 'Retrieved from api_responses table',
                         model: parsedData.model,
                         response_timestamp: row.response_timestamp
                     };
@@ -391,6 +439,7 @@ class DatabaseService {
             }
         });
 
+        console.log(`📊 Total unique devices found in cache: ${deviceMap.size}`);
         return Array.from(deviceMap.values());
     }
 
