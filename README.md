@@ -46,24 +46,31 @@ WarrantyDog is a complete warranty management solution that:
 ```bash
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
-docker-compose up --build -d
+docker build -t warrantydog .
+docker run -d -p 3001:3001 --name warrantydog warrantydog
 ```
 
 **That's it!** The application will be available at **http://localhost:3001**
 
-> **✅ Self-Sufficient Container**: The application starts automatically when the container launches - no external scripts needed!
+> **✅ Completely Self-Contained**: The Docker container starts up and immediately serves the web application - no external files, scripts, or manual steps required!
 
 ### 🐳 **Docker Commands**
 
 ```bash
+# Build the image
+docker build -t warrantydog .
+
+# Run the container
+docker run -d -p 3001:3001 --name warrantydog warrantydog
+
 # Check status
-docker-compose ps
+docker ps
 
 # View logs
-docker-compose logs -f
+docker logs warrantydog -f
 
 # Stop when done
-docker-compose down
+docker stop warrantydog && docker rm warrantydog
 ```
 
 ### 🌐 **Access Your Application**
@@ -241,9 +248,7 @@ WarrantyDog/
 │   └── data/                   # SQLite database files
 │
 ├── 🐳 Docker
-│   ├── Dockerfile              # Container definition
-│   ├── docker-compose.yml      # Container orchestration
-│   └── docker-entrypoint.sh    # Container startup script
+│   └── Dockerfile              # Self-contained container definition
 │
 ├── 🛠️ Development
 │   ├── package.json            # Dependencies & scripts
@@ -275,7 +280,7 @@ WarrantyDog/
 ## 🧪 **Testing & Validation**
 
 ### 🔍 **Quick Test**
-1. **Start Application**: `docker-compose up -d`
+1. **Start Application**: `docker run -d -p 3001:3001 --name warrantydog warrantydog`
 2. **Open Browser**: http://localhost:3001
 3. **Health Check**: http://localhost:3001/api/health should return `{"status":"ok"}`
 4. **Upload Sample**: Use `examples/sample-devices.csv`
@@ -313,16 +318,18 @@ npm run dev-server    # Backend development server
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Deploy the application
-docker-compose up --build -d
+# Build and deploy the application
+docker build -t warrantydog .
+docker run -d -p 3001:3001 --name warrantydog warrantydog
 ```
 
 **Benefits:**
+- ✅ **Completely self-contained** - starts immediately when container launches
+- ✅ **No external dependencies** - everything built into the container
 - ✅ **Consistent environment** across all platforms
 - ✅ **No dependency conflicts** - everything containerized
 - ✅ **Easy scaling** - Docker orchestration ready
-- ✅ **Automatic restarts** - container health monitoring
-- ✅ **Data persistence** - SQLite database in Docker volumes
+- ✅ **Data persistence** - SQLite database in container volumes
 
 ### 🌐 **Traditional Server Deployment**
 
@@ -365,11 +372,12 @@ pm2 save
 docker info
 
 # Clean up and restart
-docker-compose down
-docker-compose up --build -d
+docker stop warrantydog && docker rm warrantydog
+docker build --no-cache -t warrantydog .
+docker run -d -p 3001:3001 --name warrantydog warrantydog
 
 # Check logs
-docker-compose logs -f
+docker logs warrantydog -f
 ```
 
 **Port conflicts:**
@@ -453,7 +461,7 @@ cd WarrantyDog
 git checkout -b feature/your-feature-name
 
 # Start development environment
-docker-compose up -d
+docker build -t warrantydog . && docker run -d -p 3001:3001 --name warrantydog warrantydog
 # OR
 npm install && npm run dev-server
 ```
