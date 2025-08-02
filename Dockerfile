@@ -1,48 +1,40 @@
-# WarrantyDog Development Environment
-# Alpine-based Node.js container for lightweight development
+# WarrantyDog Production Environment
+# Optimized Alpine-based Node.js container for production deployment
 
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set working directory
-WORKDIR /workspace
+WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (minimal for production)
 RUN apk add --no-cache \
     bash \
-    git \
     curl \
     python3 \
-    py3-pip \
     make \
     g++ \
     && rm -rf /var/cache/apk/*
 
-# Install global npm packages for development
-RUN npm install -g \
-    eslint \
-    prettier
+# Create non-root user for security
+RUN addgroup -g 1001 warrantydog && \
+    adduser -D -s /bin/bash -u 1001 -G warrantydog warrantydog
 
-# Create non-root user for development
-RUN addgroup -g 1001 developer && \
-    adduser -D -s /bin/bash -u 1001 -G developer developer
-
-# Set up workspace permissions
-RUN chown -R developer:developer /workspace
+# Set up application permissions
+RUN chown -R warrantydog:warrantydog /app
 
 # Switch to non-root user
-USER developer
+USER warrantydog
 
 # Copy package files first for better caching
-COPY --chown=developer:developer package*.json ./
+COPY --chown=warrantydog:warrantydog package*.json ./
 
-# Install project dependencies
-RUN npm install
+# Install production dependencies only
+RUN npm ci --only=production && npm cache clean --force
 
-# Copy project files
-COPY --chown=developer:developer . .
+# Copy application files
+COPY --chown=warrantydog:warrantydog . .
 
 # Make scripts executable
-RUN chmod +x scripts/*.sh 2>/dev/null || true
 RUN chmod +x docker-entrypoint.sh start-warrantydog.sh 2>/dev/null || true
 
 # Expose WarrantyDog application port
@@ -56,6 +48,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:3001/api/health || exit 1
 
 # Labels for metadata
-LABEL maintainer="WarrantyDog Development Team"
-LABEL description="Development environment for WarrantyDog warranty checker"
+LABEL maintainer="WarrantyDog Team"
+LABEL description="Production WarrantyDog warranty checker application"
 LABEL version="1.0.0"

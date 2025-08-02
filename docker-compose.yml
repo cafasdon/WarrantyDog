@@ -1,57 +1,16 @@
-# WarrantyDog Docker Compose Configuration
-# Universal configuration that works on any Docker environment
+# WarrantyDog Simple Docker Compose Configuration
+# Maximum compatibility - works on any Docker environment
 
 services:
   warrantydog:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: warrantydog-app
+    build: .
     ports:
-      - "3001:3001"  # WarrantyDog application port
+      - "3001:3001"
     volumes:
-      # Mount source code for live development
-      - .:/workspace
-      # Preserve node_modules in container
-      - warrantydog-node-modules:/workspace/node_modules
-      # Persist database data
       - warrantydog-data:/workspace/data
     environment:
       - NODE_ENV=production
-      - PORT=3001
-    working_dir: /workspace
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  # Development service (optional - for development with live reload)
-  warrantydog-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: warrantydog-dev
-    ports:
-      - "3002:3001"  # Different port for dev environment
-    volumes:
-      - .:/workspace
-      - warrantydog-dev-modules:/workspace/node_modules
-      - warrantydog-dev-data:/workspace/data
-    environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - CHOKIDAR_USEPOLLING=true
-    working_dir: /workspace
-    restart: unless-stopped
-    profiles:
-      - dev  # Only start with --profile dev
-    command: ["bash", "-c", "npm install && node server.js"]
 
 volumes:
-  warrantydog-node-modules:
   warrantydog-data:
-  warrantydog-dev-modules:
-  warrantydog-dev-data:

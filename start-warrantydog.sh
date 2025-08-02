@@ -24,11 +24,11 @@ echo "🔧 Starting WarrantyDog application..."
 
 # Stop any existing containers
 echo "🛑 Stopping any existing WarrantyDog containers..."
-docker-compose -f docker-compose.simple.yml down > /dev/null 2>&1 || true
+docker-compose down > /dev/null 2>&1 || true
 
 # Build and start the application
 echo "🏗️  Building and starting WarrantyDog..."
-docker-compose -f docker-compose.simple.yml up --build -d
+docker-compose up --build -d
 
 # Wait for the application to be ready
 echo "⏳ Waiting for WarrantyDog to be ready..."

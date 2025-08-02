@@ -47,11 +47,11 @@ cleanup() {
 trap cleanup SIGTERM SIGINT
 
 # Ensure we're in the correct directory
-cd /workspace
+cd /app
 
 # Check if package.json exists
 if [ ! -f "package.json" ]; then
-    echo "❌ package.json not found in /workspace"
+    echo "❌ package.json not found in /app"
     echo "📁 Current directory contents:"
     ls -la
     exit 1
@@ -65,7 +65,7 @@ fi
 
 # Check if server.js exists
 if [ ! -f "server.js" ]; then
-    echo "❌ server.js not found in /workspace"
+    echo "❌ server.js not found in /app"
     echo "📁 Current directory contents:"
     ls -la
     exit 1

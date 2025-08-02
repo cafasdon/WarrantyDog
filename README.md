@@ -71,17 +71,17 @@ chmod +x start-warrantydog.sh
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Start the application (uses simple, universal configuration)
-docker-compose -f docker-compose.simple.yml up --build -d
+# Start the application
+docker-compose up --build -d
 
 # Check status
-docker-compose -f docker-compose.simple.yml ps
+docker-compose ps
 
 # View logs
-docker-compose -f docker-compose.simple.yml logs -f
+docker-compose logs -f
 
 # Stop when done
-docker-compose -f docker-compose.simple.yml down
+docker-compose down
 ```
 
 ### 🌐 **Access Your Application**

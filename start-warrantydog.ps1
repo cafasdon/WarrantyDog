@@ -28,11 +28,11 @@ Write-Host "Starting WarrantyDog application..." -ForegroundColor Yellow
 
 # Stop any existing containers
 Write-Host "Stopping any existing WarrantyDog containers..." -ForegroundColor Yellow
-docker-compose -f docker-compose.simple.yml down 2>$null
+docker-compose down 2>$null
 
 # Build and start the application
 Write-Host "Building and starting WarrantyDog..." -ForegroundColor Yellow
-docker-compose -f docker-compose.simple.yml up --build -d
+docker-compose up --build -d
 
 # Wait for the application to be ready
 Write-Host "Waiting for WarrantyDog to be ready..." -ForegroundColor Yellow
@@ -52,7 +52,7 @@ do {
     if ($attempt -ge $maxAttempts) {
         Write-Host "WarrantyDog failed to start within expected time" -ForegroundColor Red
         Write-Host "Container logs:" -ForegroundColor Red
-        docker-compose -f docker-compose.simple.yml logs --tail=20
+        docker-compose logs --tail=20
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -71,8 +71,8 @@ Write-Host "   - Dell API: http://localhost:3001/api/dell/warranty/:serviceTag" 
 Write-Host "   - Lenovo API: http://localhost:3001/api/lenovo/warranty" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Useful commands:" -ForegroundColor Yellow
-Write-Host "   - View logs: docker-compose -f docker-compose.simple.yml logs -f" -ForegroundColor Yellow
-Write-Host "   - Stop application: docker-compose -f docker-compose.simple.yml down" -ForegroundColor Yellow
+Write-Host "   - View logs: docker-compose logs -f" -ForegroundColor Yellow
+Write-Host "   - Stop application: docker-compose down" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Press Enter to open WarrantyDog in your browser..." -ForegroundColor Green
 Read-Host
