@@ -36,6 +36,8 @@ WarrantyDog is a complete warranty management solution that:
 
 ## 🚀 **Quick Start Guide**
 
+> **🔒 Clean Database Startup**: WarrantyDog starts with a completely empty database. No pre-existing warranty data or session information is included. The application automatically creates and initializes the database schema on first startup.
+
 ### 📋 **Prerequisites**
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
 - **Git** installed ([Download here](https://git-scm.com/downloads))
