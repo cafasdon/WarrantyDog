@@ -444,21 +444,15 @@ class DellAPI {
                     // Fallback: check for any array properties
                     const arrayProps = Object.values(data).filter(val => Array.isArray(val));
                     if (arrayProps.length > 0) {
-                                devices = arrayProps[0]; // Use the first array found
-                            } else {
-                                devices = [actualData]; // Treat as single device
-                            }
-                        }
-                    }
-                } else {
-                    // Check if any property is an array (Dell API sometimes nests data)
-                    const arrayProps = Object.values(data).filter(val => Array.isArray(val));
-                    if (arrayProps.length > 0) {
                         devices = arrayProps[0]; // Use the first array found
-                    } else if (data.serviceTag || data.serialNumber) {
-                        devices = [data]; // Single device response
+                    } else {
+                        devices = [data]; // Treat as single device
                     }
                 }
+            } else if (Array.isArray(data)) {
+                devices = data; // Already an array
+            } else {
+                devices = [data]; // Single device response
             }
 
             console.log(`[DEBUG] Extracted devices for ${serviceTag}:`, devices);
