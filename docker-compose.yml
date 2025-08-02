@@ -7,7 +7,7 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - warrantydog-data:/workspace/data
+      - warrantydog-data:/app/data
     environment:
       - NODE_ENV=production
     restart: unless-stopped

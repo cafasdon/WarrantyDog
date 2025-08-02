@@ -40,40 +40,22 @@ WarrantyDog is a complete warranty management solution that:
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
 - **Git** installed ([Download here](https://git-scm.com/downloads))
 
-### 🎯 **Option 1: One-Command Start (Recommended)**
+### 🎯 **One-Command Start**
 
-**Windows:**
-```cmd
-git clone https://github.com/cafasdon/WarrantyDog.git
-cd WarrantyDog
-# Option 1: PowerShell (recommended)
-powershell -ExecutionPolicy Bypass -File start-warrantydog.ps1
-# Option 2: Command Prompt (if PowerShell unavailable)
-start-warrantydog.bat
-```
-
-**Linux/Mac:**
+**Clone and start the application:**
 ```bash
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
-chmod +x start-warrantydog.sh
-./start-warrantydog.sh
+docker-compose up --build -d
 ```
 
 **That's it!** The application will be available at **http://localhost:3001**
 
-> **✅ Universal Compatibility**: Uses Docker's default networking - works on any environment, any network configuration, any Docker setup!
+> **✅ Self-Sufficient Container**: The application starts automatically when the container launches - no external scripts needed!
 
-### 🐳 **Option 2: Manual Docker Commands**
+### 🐳 **Docker Commands**
 
 ```bash
-# Clone and enter directory
-git clone https://github.com/cafasdon/WarrantyDog.git
-cd WarrantyDog
-
-# Start the application
-docker-compose up --build -d
-
 # Check status
 docker-compose ps
 
@@ -99,7 +81,7 @@ docker-compose down
 
 ## 🛠️ **Development Setup**
 
-### 🎯 **Option 3: Local Development (For Developers)**
+### 🎯 **Local Development (For Developers)**
 
 **Prerequisites:**
 - Node.js 16+ ([Download here](https://nodejs.org/))
@@ -260,15 +242,12 @@ WarrantyDog/
 │
 ├── 🐳 Docker
 │   ├── Dockerfile              # Container definition
-│   ├── docker-compose.yml      # Development orchestration
-│   ├── docker-compose.prod.yml # Production configuration
+│   ├── docker-compose.yml      # Container orchestration
 │   └── docker-entrypoint.sh    # Container startup script
 │
 ├── 🛠️ Development
 │   ├── package.json            # Dependencies & scripts
-│   ├── vite.config.js          # Modern dev server config
-│   ├── start-warrantydog.*     # Quick start scripts
-│   └── scripts/                # Setup & deployment tools
+│   └── examples/               # Sample CSV files
 │
 └── 📚 Documentation
     ├── README.md               # This file
@@ -334,11 +313,8 @@ npm run dev-server    # Backend development server
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Deploy with production configuration
-docker-compose -f docker-compose.prod.yml up -d
-
-# Or use the convenience script
-./start-warrantydog.sh
+# Deploy the application
+docker-compose up --build -d
 ```
 
 **Benefits:**

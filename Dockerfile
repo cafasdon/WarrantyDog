@@ -35,7 +35,7 @@ RUN npm ci --only=production && npm cache clean --force
 COPY --chown=warrantydog:warrantydog . .
 
 # Make scripts executable
-RUN chmod +x docker-entrypoint.sh start-warrantydog.sh 2>/dev/null || true
+RUN chmod +x docker-entrypoint.sh 2>/dev/null || true
 
 # Expose WarrantyDog application port
 EXPOSE 3001
