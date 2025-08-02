@@ -251,17 +251,19 @@ class DatabaseService {
      */
     updateDeviceState(deviceId, stateData) {
         const stmt = this.db.prepare(`
-            UPDATE devices 
-            SET processing_state = ?, warranty_status = ?, warranty_type = ?,
+            UPDATE devices
+            SET processing_state = ?, vendor = ?, model = ?, warranty_status = ?, warranty_type = ?,
                 warranty_end_date = ?, warranty_days_remaining = ?, ship_date = ?,
                 error_message = ?, is_retryable = ?, retry_count = ?,
                 updated_at = CURRENT_TIMESTAMP,
                 last_processed_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
-        
+
         return stmt.run(
             stateData.processing_state || stateData.processingState,
+            stateData.vendor || null, // Include standardized vendor
+            stateData.model || null,  // Include standardized model
             stateData.warranty_status || stateData.warrantyStatus || null,
             stateData.warranty_type || stateData.warrantyType || null,
             stateData.warranty_end_date || stateData.warrantyEndDate || null,

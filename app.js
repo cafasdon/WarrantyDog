@@ -210,11 +210,7 @@ class WarrantyChecker {
         // Export events
         this.exportBtn.addEventListener('click', () => this.exportResults());
 
-        // Migration events
-        this.migrateBtn = document.getElementById('migrateBtn');
-        if (this.migrateBtn) {
-            this.migrateBtn.addEventListener('click', () => this.migrateExistingData());
-        }
+        // Migration events removed - automatic standardization now handles this
 
         // Configuration events
         this.configBtn.addEventListener('click', () => this.showConfigModal());
@@ -2061,15 +2057,18 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 return;
             }
 
-            // Prepare state data based on result
+            // Prepare state data based on result with automatic standardization
             const stateData = {
                 processing_state: status === 'success' ? 'success' : status === 'error' ? 'failed' : 'skipped',
-                warranty_status: result.status || null,
-                warranty_type: result.warrantyType || result.type || null,
-                warranty_end_date: result.endDate || null,
+                // Apply standardization to all data before storing
+                vendor: this.standardizeVendor(device.vendor),
+                model: this.standardizeModel(result.model || device.model, device.vendor),
+                warranty_status: this.standardizeWarrantyStatus(result.status),
+                warranty_type: this.standardizeWarrantyType(result.warrantyType || result.type, result.status, result.message),
+                warranty_end_date: this.standardizeDate(result.endDate),
                 warranty_days_remaining: result.daysRemaining || null,
-                ship_date: result.shipDate || null,
-                error_message: status === 'error' ? result.message : null,
+                ship_date: this.standardizeDate(result.shipDate),
+                error_message: status === 'error' ? this.standardizeMessage(result.message, result.status) : null,
                 is_retryable: status === 'error' ? (result.retryable !== false) : null,
                 retry_count: 0,
                 last_processed_at: new Date().toISOString()
@@ -2616,39 +2615,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         return num.toString();
     }
 
-    /**
-     * Migrate existing database records to standardized format
-     */
-    async migrateExistingData() {
-        try {
-            console.log('🔄 Starting database standardization migration...');
-
-            const response = await fetch('/api/migrate-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`Migration failed: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log('✅ Database migration completed:', result);
-
-            this.showSuccess(`✅ Database standardization completed! Updated ${result.updated} records.`);
-
-            // Reload current session to show standardized data
-            if (this.currentSessionId) {
-                await this.loadSession(this.currentSessionId);
-            }
-
-        } catch (error) {
-            console.error('❌ Database migration failed:', error);
-            this.showError(`❌ Database migration failed: ${error.message}`);
-        }
-    }
+    // Manual migration function removed - automatic standardization now handles this
 
     /**
      * Export results to CSV
