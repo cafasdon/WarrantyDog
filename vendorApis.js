@@ -30,6 +30,7 @@
  */
 
 import IntelligentRateLimitingSystem from './intelligentRateLimitingSystem.js';
+import { standardizationService } from './standardizationService.js';
 
 // Legacy rate limiting configuration (now used as fallback/initial values)
 const RATE_LIMITS = {
@@ -228,9 +229,13 @@ class DellAPI {
         const data = await response.json();
         console.log('Dell API Response Data:', data);
 
+        // Apply Layer 1 standardization to raw API response
+        const standardizedData = standardizationService.standardizeRawApiResponse('dell', data);
+        console.log('Dell API Standardized Data:', standardizedData);
+
         // Parse the warranty response and store parsing results
         try {
-            const parsedResult = this.parseWarrantyResponse(data, serviceTag);
+            const parsedResult = this.parseWarrantyResponse(standardizedData, serviceTag);
 
             // Store successful parsing result if we have metadata with response ID
             if (data._metadata && data._metadata.responseId) {
@@ -428,37 +433,17 @@ class DellAPI {
             // Handle different response structures
             let devices = data;
 
-            // Check if data is wrapped in a response object
+            // Handle standardized response structure (Layer 1 standardization already applied)
             if (data && typeof data === 'object' && !Array.isArray(data)) {
-                // Common Dell API response structures
+                // Standardized response should have 'devices' field
                 if (data.devices) {
                     devices = data.devices;
                 } else if (data.entitlements) {
                     devices = [data]; // Single device response
-                } else if (data._metadata) {
-                    // Response with metadata wrapper - extract the actual data
-                    const { _metadata, ...actualData } = data;
-                    console.log(`[DEBUG] After removing metadata for ${serviceTag}:`, actualData);
-                    console.log(`[DEBUG] ActualData keys:`, Object.keys(actualData));
-
-                    // Check if the remaining data is an array or has nested structure
-                    if (Array.isArray(actualData)) {
-                        devices = actualData;
-                    } else if (actualData.devices) {
-                        devices = actualData.devices;
-                    } else if (actualData.entitlements) {
-                        devices = [actualData];
-                    } else {
-                        // Dell API often uses numeric keys like "0", "1", etc.
-                        const numericKeys = Object.keys(actualData).filter(key => !isNaN(key));
-                        if (numericKeys.length > 0) {
-                            // Extract devices from numeric keys
-                            devices = numericKeys.map(key => actualData[key]);
-                            console.log(`[DEBUG] Extracted from numeric keys for ${serviceTag}:`, devices);
-                        } else {
-                            // Check if any property is an array (common Dell API pattern)
-                            const arrayProps = Object.values(actualData).filter(val => Array.isArray(val));
-                            if (arrayProps.length > 0) {
+                } else {
+                    // Fallback: check for any array properties
+                    const arrayProps = Object.values(data).filter(val => Array.isArray(val));
+                    if (arrayProps.length > 0) {
                                 devices = arrayProps[0]; // Use the first array found
                             } else {
                                 devices = [actualData]; // Treat as single device
@@ -532,7 +517,8 @@ class DellAPI {
 
             console.log(`[DEBUG] Warranty dates for ${serviceTag}: start=${startDate.toISOString()}, end=${endDate.toISOString()}, now=${now.toISOString()}, active=${isActive}, daysRemaining=${daysRemaining}, daysExpired=${daysExpired}`);
 
-            return {
+            // Apply Layer 2 standardization to final result
+            const result = {
                 serviceTag: serviceTag,
                 vendor: 'Dell',
                 status: isActive ? 'active' : 'expired',
@@ -543,7 +529,7 @@ class DellAPI {
                 daysRemaining: daysRemaining,
                 daysExpired: daysExpired,
                 isActive: isActive,
-                model: device.productLineDescription || 'Unknown Model',
+                model: device.model || 'Unknown Model', // Use standardized field
                 shipDate: device.shipDate ? new Date(device.shipDate).toISOString().split('T')[0] : null,
                 message: isActive ?
                     `Active warranty - ${daysRemaining} days remaining` :
@@ -558,6 +544,8 @@ class DellAPI {
                     isActive: new Date(ent.endDate) > new Date()
                 }))
             };
+
+            return standardizationService.standardizeUniversalFields(result);
 
         } catch (error) {
             console.error('Error parsing Dell warranty response:', error);
@@ -649,7 +637,11 @@ class LenovoAPI {
             const data = await response.json();
             console.log(`Lenovo API Response Data:`, data);
 
-            return this.parseLenovoWarrantyResponse(data, serialNumber);
+            // Apply Layer 1 standardization to raw API response
+            const standardizedData = standardizationService.standardizeRawApiResponse('lenovo', data);
+            console.log('Lenovo API Standardized Data:', standardizedData);
+
+            return this.parseLenovoWarrantyResponse(standardizedData, serialNumber);
 
         } catch (error) {
             console.error(`Lenovo API lookup failed for ${serialNumber}:`, error);
@@ -662,9 +654,9 @@ class LenovoAPI {
      */
     parseLenovoWarrantyResponse(data, serialNumber) {
         try {
-            // Handle error codes in response
-            if (data.ErrorCode) {
-                if (data.ErrorCode === 100) {
+            // Handle error codes in response (using standardized field names)
+            if (data.error && data.error.errorCode) {
+                if (data.error.errorCode === 100) {
                     return {
                         vendor: 'Lenovo',
                         serviceTag: serialNumber,
@@ -672,33 +664,33 @@ class LenovoAPI {
                         message: 'Warranty data not found',
                         isActive: false
                     };
-                } else if (data.ErrorCode === 101) {
+                } else if (data.error.errorCode === 101) {
                     throw new Error('Multiple records found. Please specify SN.MT instead of SN');
                 } else {
-                    throw new Error(`Lenovo API error: ${data.ErrorCode} - ${data.ErrorMessage || 'Unknown error'}`);
+                    throw new Error(`Lenovo API error: ${data.error.errorCode} - ${data.error.errorMessage || 'Unknown error'}`);
                 }
             }
 
-            // Extract basic information
-            const product = data.Product || 'Unknown';
-            const inWarranty = data.InWarranty || false;
-            const purchased = data.Purchased ? new Date(data.Purchased) : null;
-            const shipped = data.Shipped ? new Date(data.Shipped) : null;
-            const country = data.Country || '';
+            // Extract basic information (using standardized field names)
+            const product = data.model || 'Unknown';
+            const inWarranty = data.isActive || false;
+            const purchased = data.purchaseDate ? new Date(data.purchaseDate) : null;
+            const shipped = data.shipDate ? new Date(data.shipDate) : null;
+            const country = data.country || '';
 
-            // Process warranty information
-            const warranties = data.Warranty || [];
+            // Process warranty information (using standardized field names)
+            const warranties = data.warranties || [];
             let primaryWarranty = null;
             let warrantyEndDate = null;
             let warrantyType = 'Unknown';
 
             if (warranties.length > 0) {
-                // Find the primary/base warranty or the one with the latest end date
-                primaryWarranty = warranties.find(w => w.Type === 'BASE') || warranties[0];
+                // Find the primary/base warranty or the one with the latest end date (using standardized fields)
+                primaryWarranty = warranties.find(w => w.warrantyCategory === 'BASE') || warranties[0];
 
                 if (primaryWarranty) {
-                    warrantyType = primaryWarranty.Name || primaryWarranty.Description || 'Standard Warranty';
-                    warrantyEndDate = primaryWarranty.End ? new Date(primaryWarranty.End) : null;
+                    warrantyType = primaryWarranty.warrantyType || primaryWarranty.warrantyDescription || 'Standard Warranty';
+                    warrantyEndDate = primaryWarranty.endDate ? new Date(primaryWarranty.endDate) : null;
                 }
             }
 
@@ -730,12 +722,13 @@ class LenovoAPI {
                 }
             }
 
-            return {
+            // Apply Layer 2 standardization to final result
+            const result = {
                 vendor: 'Lenovo',
                 serviceTag: serialNumber,
                 status: status,
                 warrantyType: warrantyType,
-                startDate: primaryWarranty?.Start || shipped?.toISOString() || null,
+                startDate: primaryWarranty?.startDate || shipped?.toISOString() || null,
                 endDate: warrantyEndDate?.toISOString() || null,
                 shipDate: shipped?.toISOString() || null,
                 daysRemaining: daysRemaining,
@@ -744,17 +737,19 @@ class LenovoAPI {
                 model: product,
                 country: country,
                 purchaseDate: purchased?.toISOString() || null,
-                upgradeUrl: data.UpgradeUrl || null,
+                upgradeUrl: data.upgradeUrl || null,
                 allWarranties: warranties.map(w => ({
-                    id: w.ID,
-                    name: w.Name,
-                    description: w.Description,
-                    type: w.Type,
-                    start: w.Start,
-                    end: w.End
+                    id: w.warrantyId,
+                    name: w.warrantyType,
+                    description: w.warrantyDescription,
+                    type: w.warrantyCategory,
+                    start: w.startDate,
+                    end: w.endDate
                 })),
-                contracts: data.Contract || []
+                contracts: data.contracts || []
             };
+
+            return standardizationService.standardizeUniversalFields(result);
 
         } catch (error) {
             console.error('Error parsing Lenovo warranty response:', error);

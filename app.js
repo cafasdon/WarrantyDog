@@ -22,6 +22,7 @@
  */
 
 import { WarrantyLookupService } from './vendorApis.js?v=20250724-0200';
+import { standardizationService } from './standardizationService.js';
 
 /**
  * Main WarrantyChecker Application Class
@@ -2057,19 +2058,23 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 return;
             }
 
-            // Prepare state data based on result with automatic standardization
+            // Prepare state data with enhanced two-layer standardization
+            // Layer 1 & 2 standardization already applied in vendor APIs
+            // Apply final database-specific standardization
+            const enhancedResult = standardizationService.standardizeUniversalFields(result);
+
             const stateData = {
                 processing_state: status === 'success' ? 'success' : status === 'error' ? 'failed' : 'skipped',
-                // Apply standardization to all data before storing
+                // Use enhanced standardization results
                 vendor: this.standardizeVendor(device.vendor),
-                model: this.standardizeModel(result.model || device.model, device.vendor),
-                warranty_status: this.standardizeWarrantyStatus(result.status),
-                warranty_type: this.standardizeWarrantyType(result.warrantyType || result.type, result.status, result.message),
-                warranty_end_date: this.standardizeDate(result.endDate),
-                warranty_days_remaining: result.daysRemaining || null,
-                ship_date: this.standardizeDate(result.shipDate),
-                error_message: status === 'error' ? this.standardizeMessage(result.message, result.status) : null,
-                is_retryable: status === 'error' ? (result.retryable !== false) : null,
+                model: this.standardizeModel(enhancedResult.model || device.model, device.vendor),
+                warranty_status: this.standardizeWarrantyStatus(enhancedResult.status),
+                warranty_type: this.standardizeWarrantyType(enhancedResult.warrantyType || enhancedResult.type, enhancedResult.status, enhancedResult.message),
+                warranty_end_date: this.standardizeDate(enhancedResult.endDate),
+                warranty_days_remaining: enhancedResult.daysRemaining || null,
+                ship_date: this.standardizeDate(enhancedResult.shipDate),
+                error_message: status === 'error' ? this.standardizeMessage(enhancedResult.message, enhancedResult.status) : null,
+                is_retryable: status === 'error' ? (enhancedResult.retryable !== false) : null,
                 retry_count: 0,
                 last_processed_at: new Date().toISOString()
             };
