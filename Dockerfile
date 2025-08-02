@@ -19,8 +19,6 @@ RUN apk add --no-cache \
 
 # Install global npm packages for development
 RUN npm install -g \
-    live-server \
-    http-server \
     eslint \
     prettier
 
