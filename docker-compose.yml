@@ -4,50 +4,57 @@
 version: '3.8'
 
 services:
+  warrantydog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: warrantydog-app
+    ports:
+      - "3001:3001"  # WarrantyDog application port
+    volumes:
+      # Mount source code for live development
+      - .:/workspace
+      # Preserve node_modules in container
+      - warrantydog-node-modules:/workspace/node_modules
+      # Persist database data
+      - warrantydog-data:/workspace/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    working_dir: /workspace
+    restart: unless-stopped
+    networks:
+      - warrantydog-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Development service (optional - for development with live reload)
   warrantydog-dev:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: warrantydog-dev
     ports:
-      - "8080:8080"
-      - "3000:3000"  # Alternative port for testing
+      - "3002:3001"  # Different port for dev environment
     volumes:
-      # Mount source code for live development
       - .:/workspace
-      # Preserve node_modules in container
-      - /workspace/node_modules
-      # Mount git config for commits (if available)
-      # - ~/.gitconfig:/home/developer/.gitconfig:ro
-      # Mount SSH keys for git operations (if available)
-      # - ~/.ssh:/home/developer/.ssh:ro
+      - warrantydog-dev-modules:/workspace/node_modules
+      - warrantydog-dev-data:/workspace/data
     environment:
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true  # For file watching in containers
-      - WATCHPACK_POLLING=true    # For webpack file watching
+      - PORT=3001
+      - CHOKIDAR_USEPOLLING=true
     working_dir: /workspace
-    stdin_open: true
-    tty: true
     restart: unless-stopped
     networks:
       - warrantydog-network
-    # Override default command to keep container running
-    command: tail -f /dev/null
-
-  # Optional: Add a simple web server for testing
-  web-server:
-    image: nginx:alpine
-    container_name: warrantydog-web
-    ports:
-      - "8081:80"
-    volumes:
-      - .:/usr/share/nginx/html:ro
-    depends_on:
-      - warrantydog-dev
-    networks:
-      - warrantydog-network
     profiles:
-      - web  # Only start with --profile web
+      - dev  # Only start with --profile dev
+    command: ["bash", "-c", "npm install && node server.js"]
 
 networks:
   warrantydog-network:
@@ -55,5 +62,11 @@ networks:
     name: warrantydog-network
 
 volumes:
-  node_modules:
+  warrantydog-node-modules:
     name: warrantydog-node-modules
+  warrantydog-data:
+    name: warrantydog-data
+  warrantydog-dev-modules:
+    name: warrantydog-dev-modules
+  warrantydog-dev-data:
+    name: warrantydog-dev-data

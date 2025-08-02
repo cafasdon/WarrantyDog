@@ -24,27 +24,42 @@ A browser-based warranty checker that fetches warranty information from multiple
 - **CORS Solution**: Backend proxy eliminates browser CORS limitations
 - **Data Processing**: CSV parsing with vendor detection and smart filtering
 
-## 🚀 Quick Start with Docker
+## 🚀 Quick Start with Docker (Immediate Web Access)
 
 ### Prerequisites
 - Docker Desktop installed and running
 - Git
 
-### One-Command Setup
-```bash
-git clone https://github.com/yourusername/WarrantyDog.git
+### 🎯 **Instant Start (Recommended)**
+
+**Windows:**
+```cmd
+git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
-chmod +x scripts/*.sh
-./scripts/complete-setup.sh
+start-warrantydog.bat
 ```
 
-### Start Development
+**Linux/Mac:**
 ```bash
-make shell          # Enter development container
-npm run dev         # Start development server
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
+chmod +x start-warrantydog.sh
+./start-warrantydog.sh
 ```
 
-Then open http://localhost:8080 in your browser.
+**Manual Docker Compose:**
+```bash
+# Production mode (immediate web access)
+docker-compose up --build -d
+
+# Development mode (with live reload)
+docker-compose --profile dev up --build -d
+```
+
+### 🌐 **Access Points**
+- **Web Interface**: http://localhost:3001 (immediately available)
+- **Health Check**: http://localhost:3001/api/health
+- **Development**: http://localhost:3002 (if using dev profile)
 
 ## 🚀 **Quick Start with Backend Server (Recommended)**
 

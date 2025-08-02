@@ -80,6 +80,7 @@ class WarrantyChecker {
         // API status elements
         this.apiStatusContainer = document.getElementById('apiStatus');
         this.dellStatusElement = document.getElementById('dellStatus');
+        this.lenovoStatusElement = document.getElementById('lenovoStatus');
 
         // Log missing elements
         const elements = {
@@ -101,7 +102,8 @@ class WarrantyChecker {
             dellApiKeyInput: this.dellApiKeyInput,
             testDellApiBtn: this.testDellApiBtn,
             testResultElement: this.testResultElement,
-            dellStatusElement: this.dellStatusElement
+            dellStatusElement: this.dellStatusElement,
+            lenovoStatusElement: this.lenovoStatusElement
         };
 
         Object.entries(elements).forEach(([name, element]) => {
@@ -304,7 +306,9 @@ class WarrantyChecker {
      */
     updateApiStatus() {
         const dellApiKey = localStorage.getItem('dell_api_key');
+        const lenovoApiKey = localStorage.getItem('lenovo_api_key');
 
+        // Update Dell status
         if (this.dellStatusElement) {
             if (dellApiKey && dellApiKey.trim().length > 0) {
                 this.dellStatusElement.textContent = '✅ Configured & Validated';
@@ -314,6 +318,19 @@ class WarrantyChecker {
                 this.dellStatusElement.textContent = '❌ Not configured';
                 this.dellStatusElement.className = 'status not-configured';
                 this.dellStatusElement.title = 'No Dell API key configured';
+            }
+        }
+
+        // Update Lenovo status
+        if (this.lenovoStatusElement) {
+            if (lenovoApiKey && lenovoApiKey.trim().length > 0) {
+                this.lenovoStatusElement.textContent = '✅ Configured & Validated';
+                this.lenovoStatusElement.className = 'status configured';
+                this.lenovoStatusElement.title = 'API key format validated and saved. Will be tested with actual API calls during warranty processing.';
+            } else {
+                this.lenovoStatusElement.textContent = '❌ Not configured';
+                this.lenovoStatusElement.className = 'status not-configured';
+                this.lenovoStatusElement.title = 'No Lenovo API key configured';
             }
         }
     }
@@ -470,6 +487,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
      * Get all valid devices from CSV data, including unsupported vendors
      */
     getValidDevicesFromCsv() {
+        // If we have unique devices (after deduplication), use those
+        if (this.uniqueDevices) {
+            return this.uniqueDevices;
+        }
+
+        // Otherwise, filter from CSV data
         return this.csvData.filter(row => {
             // Skip virtual machines and entries without serial numbers
             if (this.isVirtualMachine(row)) return false;
@@ -728,8 +751,24 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         const tbody = this.resultsTable.querySelector('tbody');
         tbody.innerHTML = '';
 
-        // Add devices to table with initial status
+        // Remove duplicates from devices array (same serial number + vendor)
+        const uniqueDevices = [];
+        const seenDevices = new Set();
+
         devices.forEach(device => {
+            const deviceKey = `${device.vendor}_${device.serialNumber}`;
+            if (!seenDevices.has(deviceKey)) {
+                seenDevices.add(deviceKey);
+                uniqueDevices.push(device);
+            } else {
+                console.log(`🔄 Duplicate device detected in CSV: ${device.serialNumber} (${device.vendor}) - skipping duplicate entry`);
+            }
+        });
+
+        console.log(`📊 Device deduplication: ${devices.length} total -> ${uniqueDevices.length} unique devices`);
+
+        // Add unique devices to table with initial status
+        uniqueDevices.forEach(device => {
             const row = tbody.insertRow();
             const apiStatus = this.getApiStatusText(device);
 
@@ -748,11 +787,14 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             `;
 
             // Store device data for later processing
-            row.dataset.deviceIndex = devices.indexOf(device);
+            row.dataset.deviceIndex = uniqueDevices.indexOf(device);
         });
 
+        // Store the unique devices for later use
+        this.uniqueDevices = uniqueDevices;
+
         // Show processing controls
-        this.updateProcessingControls(devices);
+        this.updateProcessingControls(uniqueDevices);
     }
 
     /**
@@ -823,6 +865,89 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
     }
 
     /**
+     * Update processing controls accounting for devices with cached data
+     */
+    updateProcessingControlsWithCache(devices) {
+        // Count devices that have actual warranty data (not just pending/error states)
+        const devicesWithWarrantyData = new Set();
+
+        this.processedResults.forEach(result => {
+            // Only count as "processed" if we have actual warranty data, not errors or pending states
+            if (result.status === 'success' && result.warrantyStatus &&
+                result.warrantyStatus !== 'Unknown' && result.warrantyStatus !== 'Pending') {
+                devicesWithWarrantyData.add(`${result.vendor}_${result.serviceTag}`);
+            }
+        });
+
+        // Filter devices that need processing (supported, configured, and don't have warranty data)
+        const devicesNeedingProcessing = devices.filter(device => {
+            const deviceKey = `${device.vendor}_${device.serialNumber}`;
+            const hasWarrantyData = devicesWithWarrantyData.has(deviceKey);
+            return device.isSupported && device.apiConfigured && !hasWarrantyData;
+        });
+
+        const processableCount = devicesNeedingProcessing.length;
+        const cachedCount = devices.filter(device => {
+            const deviceKey = `${device.vendor}_${device.serialNumber}`;
+            return devicesWithWarrantyData.has(deviceKey);
+        }).length;
+
+        const unsupportedCount = devices.filter(d => !d.isSupported).length;
+        const unconfiguredCount = devices.filter(d => d.isSupported && !d.apiConfigured).length;
+        const skipCount = unsupportedCount + unconfiguredCount;
+
+        // Count devices that are pending/need retry (supported but no warranty data yet)
+        const pendingDevices = devices.filter(device => {
+            const deviceKey = `${device.vendor}_${device.serialNumber}`;
+            const hasWarrantyData = devicesWithWarrantyData.has(deviceKey);
+            return device.isSupported && !hasWarrantyData; // Include all supported devices without warranty data
+        });
+
+        const totalProcessableCount = pendingDevices.length;
+
+        // Update process button text
+        if (totalProcessableCount === 0) {
+            if (cachedCount > 0) {
+                this.processBtn.textContent = '✅ All Supported Devices Processed';
+                this.processBtn.disabled = true;
+            } else {
+                this.processBtn.textContent = 'No Devices Ready for Processing';
+                this.processBtn.disabled = true;
+            }
+        } else {
+            // Count devices that will be skipped due to API configuration
+            const configuredCount = pendingDevices.filter(d => d.apiConfigured).length;
+            const unconfiguredSupportedCount = pendingDevices.filter(d => !d.apiConfigured).length;
+
+            const buttonText = unconfiguredSupportedCount > 0 ?
+                `Process ${configuredCount} Device${configuredCount !== 1 ? 's' : ''} (Skip ${skipCount + unconfiguredSupportedCount})` :
+                `Process ${configuredCount} Device${configuredCount !== 1 ? 's' : ''}`;
+            this.processBtn.textContent = buttonText;
+            this.processBtn.disabled = configuredCount === 0;
+        }
+
+        // Show updated status summary
+        let statusMessage = `📊 Device Summary: ${devices.length} total devices detected\n`;
+
+        const configuredPendingCount = pendingDevices.filter(d => d.apiConfigured).length;
+        const unconfiguredSupportedCount = pendingDevices.filter(d => !d.apiConfigured).length;
+
+        statusMessage += `✅ Ready for processing: ${configuredPendingCount}\n`;
+        if (cachedCount > 0) {
+            statusMessage += `💾 Already processed (cached): ${cachedCount}\n`;
+        }
+        if (unconfiguredSupportedCount > 0) {
+            statusMessage += `⚙️ Supported but need API config: ${unconfiguredSupportedCount}\n`;
+        }
+        if (unsupportedCount > 0) {
+            statusMessage += `❌ Unsupported vendors: ${unsupportedCount}\n`;
+        }
+        statusMessage += `\n💡 Tip: Configure API keys to process more devices!`;
+
+        this.showPersistentMessage(statusMessage, 'info');
+    }
+
+    /**
      * Start warranty processing
      */
     async startProcessing() {
@@ -844,7 +969,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         // Keep results container visible for live updates
         this.resultsContainer.style.display = 'block';
 
-        this.processedResults = [];
+        // Don't clear processedResults if we have cached data - only clear if starting fresh
+        if (!this.processedResults || this.processedResults.length === 0) {
+            this.processedResults = [];
+        }
         this.currentIndex = 0;
 
         try {
@@ -914,6 +1042,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         let failed = 0;
 
         // Filter out devices that already have cached data loaded
+        console.log(`🔍 Checking ${processableDevices.length} processable devices against ${this.processedResults.length} cached results`);
+
         const devicesToProcess = processableDevices.filter(device => {
             const alreadyProcessed = this.processedResults.some(result =>
                 result.serviceTag === device.serialNumber && result.vendor === device.vendor
@@ -923,6 +1053,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             }
             return !alreadyProcessed;
         });
+
+        console.log(`📊 Filtering results: ${processableDevices.length} processable -> ${devicesToProcess.length} need processing`);
 
         // Count devices already loaded from cache
         const cachedDevices = processableDevices.length - devicesToProcess.length;
@@ -969,6 +1101,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 this.updateDeviceRowRealtime(device, result, 'success');
                 this.processedResults.push(result);
 
+                // Step 5: Update database
+                this.updateDeviceInDatabase(device, result, 'success').catch(err =>
+                    console.error('Database update failed:', err)
+                );
+
                 successful++;
                 console.log(`✅ Successfully processed ${device.serialNumber}: ${result.status}`);
 
@@ -988,6 +1125,12 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
                 this.updateDeviceRowRealtime(device, errorResult, 'error');
                 this.processedResults.push(errorResult);
+
+                // Update database with error information
+                this.updateDeviceInDatabase(device, errorResult, 'error').catch(err =>
+                    console.error('Database update failed:', err)
+                );
+
                 failed++;
             }
 
@@ -1021,6 +1164,11 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
 
             this.updateDeviceRowRealtime(device, skipResult, 'skipped');
             this.processedResults.push(skipResult);
+
+            // Update database with skip information
+            this.updateDeviceInDatabase(device, skipResult, 'skipped').catch(err =>
+                console.error('Database update failed:', err)
+            );
         });
 
         // Final update
@@ -1068,6 +1216,7 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         }
 
         console.log(`📋 Bulk loading cached warranty data for ${supportedDevices.length} supported devices...`);
+        console.log('📋 Sample supported devices:', supportedDevices.slice(0, 3).map(d => ({serial: d.serialNumber, vendor: d.vendor, supported: d.isSupported, configured: d.apiConfigured})));
         const startTime = Date.now();
 
         try {
@@ -1084,23 +1233,43 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 const cacheKey = `${device.vendor}_${device.serialNumber}`;
                 const cachedData = cachedDataMap.get(cacheKey);
 
+                console.log(`🔍 Checking cache for ${device.serialNumber} (${device.vendor}), key: ${cacheKey}, found: ${!!cachedData}`);
                 if (cachedData) {
-                    // Enhance cached data with current device information
-                    const result = {
-                        ...cachedData,
-                        originalData: device.originalData,
-                        deviceName: device.deviceName,
-                        location: device.location,
-                        model: cachedData.model || device.model
-                    };
+                    console.log(`📋 Cache data for ${device.serialNumber}:`, {
+                        status: cachedData.status,
+                        warrantyStatus: cachedData.warrantyStatus,
+                        warrantyType: cachedData.warrantyType,
+                        source: cachedData.source || 'unknown'
+                    });
+                }
 
-                    // Update the table row immediately with cached data
-                    this.updateDeviceRowRealtime(device, result, 'success');
+                if (cachedData) {
+                    // Check if this device is already in processedResults to avoid duplicates
+                    const existingIndex = this.processedResults.findIndex(existing =>
+                        existing.serviceTag === device.serialNumber && existing.vendor === device.vendor
+                    );
 
-                    // Add to processed results
-                    this.processedResults.push(result);
+                    if (existingIndex >= 0) {
+                        console.log(`⚠️ Duplicate detected: ${device.serialNumber} already in processedResults, skipping cache load`);
+                    } else {
+                        // Enhance cached data with current device information
+                        const result = {
+                            ...cachedData,
+                            originalData: device.originalData,
+                            deviceName: device.deviceName,
+                            location: device.location,
+                            model: cachedData.model || device.model
+                        };
 
-                    cacheHits++;
+                        // Update the table row immediately with cached data
+                        this.updateDeviceRowRealtime(device, result, 'success');
+
+                        // Add to processed results
+                        this.processedResults.push(result);
+                        console.log(`💾 Added ${device.serialNumber} to processedResults (total: ${this.processedResults.length})`);
+
+                        cacheHits++;
+                    }
                 }
             }
 
@@ -1114,8 +1283,13 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 if (this.processedResults.length > 0) {
                     this.exportBtn.disabled = false;
                 }
+
+                // Update processing controls to reflect cached devices
+                this.updateProcessingControlsWithCache(devices);
             } else {
                 console.log('📋 No cached warranty data found');
+                // Still update processing controls to ensure they're current
+                this.updateProcessingControlsWithCache(devices);
             }
         } catch (error) {
             console.error('❌ Failed to bulk load cached data:', error);
@@ -1341,10 +1515,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     // Update UI in real-time
                     this.updateDeviceRowRealtime(device, result, 'success');
 
-                    // TODO: Fix database update integration
-                    // this.updateDeviceInDatabase(device, result, 'success').catch(err =>
-                    //     console.error('Database update failed:', err)
-                    // );
+                    // Update database with warranty information
+                    this.updateDeviceInDatabase(device, result, 'success').catch(err =>
+                        console.error('Database update failed:', err)
+                    );
 
                     return result;
                 } catch (error) {
@@ -1364,10 +1538,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                     // Update UI with error
                     this.updateDeviceRowRealtime(device, errorResult, 'error');
 
-                    // TODO: Fix database update integration
-                    // this.updateDeviceInDatabase(device, errorResult, 'error').catch(err =>
-                    //     console.error('Database update failed:', err)
-                    // );
+                    // Update database with error information
+                    this.updateDeviceInDatabase(device, errorResult, 'error').catch(err =>
+                        console.error('Database update failed:', err)
+                    );
 
                     return errorResult;
                 }
@@ -1426,10 +1600,10 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             };
             allResults.push(skipResult);
             this.updateDeviceRowRealtime(device, skipResult, 'skipped');
-            // TODO: Fix database update integration
-            // this.updateDeviceInDatabase(device, skipResult, 'skipped').catch(err =>
-            //     console.error('Database update failed:', err)
-            // );
+            // Update database with skip information
+            this.updateDeviceInDatabase(device, skipResult, 'skipped').catch(err =>
+                console.error('Database update failed:', err)
+            );
         });
 
         // Store all results
