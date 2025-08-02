@@ -19,6 +19,8 @@ WarrantyDog is a complete warranty management solution that:
 ### ✨ **Key Features**
 - ✅ **Dell OAuth 2.0 Integration**: Full API authentication with rate limiting
 - ✅ **Lenovo API Support**: Complete warranty lookup functionality
+- ✅ **Enterprise Security**: Rate limiting, security headers, structured logging
+- ✅ **Operational Monitoring**: Real-time metrics and performance tracking
 - ✅ **Smart Processing**: Skips unconfigured vendors to save API quotas
 - ✅ **Modern Development**: Vite dev server, secure dependencies
 - ✅ **Docker Ready**: One-command deployment anywhere
@@ -285,9 +287,17 @@ WarrantyDog/
 - ✅ **No client-side API keys** - all credentials secured in backend
 - ✅ **OAuth 2.0 implementation** - proper vendor authentication
 - ✅ **CORS protection** - backend proxy eliminates browser restrictions
-- ✅ **Rate limiting** - prevents API quota exhaustion
+- ✅ **Express Rate Limiting** - 100 requests per 15 minutes per IP on API endpoints
+- ✅ **Security Headers** - Helmet.js with CSP, HSTS, and CORS protection
 - ✅ **Input validation** - sanitized CSV processing
 - ✅ **Modern dependencies** - all security vulnerabilities fixed
+
+### 📊 **Monitoring & Observability**
+- ✅ **Structured Logging** - Winston with JSON formatting and file rotation
+- ✅ **Metrics Endpoint** - Real-time operational data at `/api/metrics`
+- ✅ **Performance Tracking** - Response time analysis and error monitoring
+- ✅ **Security Events** - Rate limiting and security incident logging
+- ✅ **System Monitoring** - Memory usage, uptime, and resource tracking
 
 ---
 
