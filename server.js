@@ -19,7 +19,11 @@ import cors from 'cors';
 import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import DatabaseService from './database/DatabaseService.js';
+import logger from './logger.js';
+import metrics from './metrics.js';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -32,7 +36,77 @@ const PORT = process.env.PORT || 3001;
 const dbService = new DatabaseService();
 let dbInitialized = false;
 
-// Middleware
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"]
+        }
+    },
+    crossOriginEmbedderPolicy: false // Allow embedding for development
+}));
+
+// Rate limiting for API endpoints
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+        error: 'rate_limit_exceeded',
+        message: 'Too many requests from this IP, please try again later.',
+        retryAfter: 15 * 60 // 15 minutes in seconds
+    },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    handler: (req, res) => {
+        metrics.recordRateLimitBlocked(req.ip);
+        logger.securityEvent('rate_limit_exceeded', req.ip, req.get('User-Agent'), {
+            endpoint: req.path,
+            method: req.method
+        });
+        res.status(429).json({
+            error: 'rate_limit_exceeded',
+            message: 'Too many requests from this IP, please try again later.',
+            retryAfter: 15 * 60
+        });
+    }
+});
+
+// Apply rate limiting to API routes only
+app.use('/api/', apiLimiter);
+
+// Request logging and metrics middleware
+app.use((req, res, next) => {
+    const startTime = Date.now();
+
+    // Log incoming request
+    logger.apiRequest(req.method, req.url, req.ip, req.get('User-Agent'));
+
+    // Override res.end to capture response metrics
+    const originalEnd = res.end;
+    res.end = function(...args) {
+        const responseTime = Date.now() - startTime;
+
+        // Record metrics
+        metrics.recordRequest(req.method, req.url, res.statusCode, responseTime, req.ip);
+
+        // Log response
+        logger.apiResponse(req.method, req.url, res.statusCode, responseTime, req.ip);
+
+        originalEnd.apply(this, args);
+    };
+
+    next();
+});
+
+// Basic middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increased limit for large CSV files
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -57,7 +131,7 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
             });
         }
 
-        console.log(`Generating OAuth token for Dell API request: ${serviceTag}`);
+        logger.info(`Generating OAuth token for Dell API request: ${serviceTag}`);
 
         // Step 1: Generate OAuth 2.0 access token
         const authUrl = 'https://apigtwb2c.us.dell.com/auth/oauth/v2/token';
@@ -74,7 +148,7 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
 
         if (!tokenResponse.ok) {
             const errorData = await tokenResponse.text();
-            console.error('OAuth token generation failed:', errorData);
+            logger.error('OAuth token generation failed:', { errorData, serviceTag });
             return res.status(401).json({
                 error: 'Invalid Dell API key. Please check your API key configuration.',
                 details: errorData
@@ -84,10 +158,11 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
         const tokenData = await tokenResponse.json();
         const accessToken = tokenData.access_token;
 
-        console.log(`OAuth token generated successfully, making warranty request for: ${serviceTag}`);
+        logger.info(`OAuth token generated successfully, making warranty request for: ${serviceTag}`);
 
         // Step 2: Make warranty lookup request with Bearer token
         const warrantyUrl = `https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements?servicetags=${serviceTag}`;
+        const warrantyStartTime = Date.now();
 
         const warrantyResponse = await fetch(warrantyUrl, {
             method: 'GET',
@@ -97,7 +172,16 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
             }
         });
 
-        console.log(`Dell API Response Status: ${warrantyResponse.status}`);
+        const warrantyResponseTime = Date.now() - warrantyStartTime;
+        logger.info(`Dell API Response Status: ${warrantyResponse.status}`, {
+            serviceTag,
+            responseTime: warrantyResponseTime
+        });
+
+        // Record vendor API metrics
+        metrics.recordVendorApiCall('dell', warrantyResponseTime,
+            warrantyResponse.status >= 400,
+            warrantyResponse.status === 429);
 
         // Handle rate limiting (429 Too Many Requests)
         if (warrantyResponse.status === 429) {
@@ -114,7 +198,11 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
                 serviceTag: serviceTag
             };
 
-            console.log(`Rate limit exceeded for ${serviceTag}. Retry after: ${retryAfter || '60'} seconds`);
+            logger.warn(`Rate limit exceeded for ${serviceTag}. Retry after: ${retryAfter || '60'} seconds`, {
+                serviceTag,
+                retryAfter,
+                vendor: 'dell'
+            });
             return res.status(429).json(rateLimitInfo);
         }
 
@@ -140,9 +228,9 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
 
             const result = dbService.storeApiResponse('dell', serviceTag, requestData, responseDataForStorage);
             responseId = result.lastInsertRowid;
-            console.log(`Stored API response for ${serviceTag} in database with ID: ${responseId}`);
+            logger.info(`Stored API response for ${serviceTag} in database with ID: ${responseId}`);
         } catch (storageError) {
-            console.error(`Failed to store API response for ${serviceTag}:`, storageError);
+            logger.error(`Failed to store API response for ${serviceTag}:`, storageError);
             // Continue processing even if storage fails
         }
 
@@ -163,7 +251,7 @@ app.get('/api/dell/warranty/:serviceTag', async (req, res) => {
         res.status(warrantyResponse.status).json(responseData);
 
     } catch (error) {
-        console.error('Dell API proxy error:', error);
+        logger.error('Dell API proxy error:', { error: error.message, stack: error.stack, serviceTag });
         res.status(500).json({
             error: 'Internal server error',
             message: error.message
@@ -388,6 +476,20 @@ app.get('/api/health', (req, res) => {
     };
 
     res.status(200).json(healthCheck);
+});
+
+// Metrics endpoint for operational monitoring
+app.get('/api/metrics', (req, res) => {
+    try {
+        const metricsData = metrics.getMetrics();
+        res.status(200).json(metricsData);
+    } catch (error) {
+        logger.error('Error getting metrics:', error);
+        res.status(500).json({
+            error: 'Failed to get metrics',
+            message: error.message
+        });
+    }
 });
 
 // Readiness check endpoint
@@ -676,31 +778,36 @@ async function startServer() {
         console.log('Initializing database...');
         await dbService.initialize();
         dbInitialized = true;
-        console.log('Database initialized successfully');
+        logger.info('Database initialized successfully');
 
         // Start server
         app.listen(PORT, () => {
-            console.log(`🐕 WarrantyDog API proxy server running on port ${PORT}`);
-            console.log(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);
-            console.log(`📡 Lenovo API proxy available at: http://localhost:${PORT}/api/lenovo/warranty`);
-            console.log(`🌐 Web interface available at: http://localhost:${PORT}`);
-            console.log(`💾 Database: SQLite with persistent session management`);
+            logger.info(`🐕 WarrantyDog API proxy server running on port ${PORT}`, {
+                port: PORT,
+                environment: process.env.NODE_ENV || 'development',
+                nodeVersion: process.version
+            });
+            logger.info(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);
+            logger.info(`📡 Lenovo API proxy available at: http://localhost:${PORT}/api/lenovo/warranty`);
+            logger.info(`🌐 Web interface available at: http://localhost:${PORT}`);
+            logger.info(`💾 Database: SQLite with persistent session management`);
+            logger.info(`📊 Metrics endpoint available at: http://localhost:${PORT}/api/metrics`);
         });
     } catch (error) {
-        console.error('Failed to start server:', error);
+        logger.error('Failed to start server:', { error: error.message, stack: error.stack });
         process.exit(1);
     }
 }
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\nShutting down gracefully...');
+    logger.info('\nShutting down gracefully...');
     dbService.close();
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-    console.log('\nShutting down gracefully...');
+    logger.info('\nShutting down gracefully...');
     dbService.close();
     process.exit(0);
 });

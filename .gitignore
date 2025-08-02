@@ -48,6 +48,10 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 
+# Log files (may contain sensitive information)
+logs/
+*.log
+
 # Coverage directory used by tools like istanbul
 coverage/
 
