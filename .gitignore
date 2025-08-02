@@ -36,6 +36,18 @@ pids
 *.seed
 *.pid.lock
 
+# SQLite database files (contains actual user data - never commit)
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+data/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
 # Coverage directory used by tools like istanbul
 coverage/
 
