@@ -40,19 +40,31 @@ WarrantyDog is a complete warranty management solution that:
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
 - **Git** installed ([Download here](https://git-scm.com/downloads))
 
-### 🎯 **One-Command Start**
+### ⚡ **One-Liner Installation**
 
-**Clone and start the application:**
+**Linux/macOS/WSL:**
+```bash
+curl -sSL https://raw.githubusercontent.com/cafasdon/WarrantyDog/main/install.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/cafasdon/WarrantyDog/main/install.ps1 | iex
+```
+
+**That's it!** The application will be automatically cloned, built, and started at **http://localhost:3001**
+
+> **🚀 Zero-Configuration**: One command does everything - clones repo, builds container, starts application, and verifies it's running!
+
+### 🎯 **Manual Installation (Alternative)**
+
+**If you prefer to run the steps manually:**
 ```bash
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 docker build -t warrantydog .
 docker run -d -p 3001:3001 --name warrantydog warrantydog
 ```
-
-**That's it!** The application will be available at **http://localhost:3001**
-
-> **✅ Completely Self-Contained**: The Docker container starts up and immediately serves the web application - no external files, scripts, or manual steps required!
 
 ### 🐳 **Docker Commands**
 
