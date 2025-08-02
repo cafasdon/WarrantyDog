@@ -19,8 +19,8 @@
     "warranty-checker",
     "device-management"
   ],
-  "author": "WarrantyDog Contributors",
-  "license": "MIT",
+  "author": "Rodrigo Quintian (cafasdon)",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/cafasdon/WarrantyDog.git"

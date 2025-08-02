@@ -516,7 +516,16 @@ git push origin feature/your-feature-name
 
 ## 📄 **License**
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Apache License 2.0** - see the [LICENSE](LICENSE) file for details.
+
+### 🔒 **Attribution Requirements**
+Under the Apache License 2.0, any use of this software requires:
+- **Prominent attribution** to the original author (Rodrigo Quintian)
+- **Inclusion of the LICENSE file** in any distribution
+- **Documentation of changes** made to the original code
+- **Preservation of copyright notices** in derivative works
+
+This ensures proper credit while still allowing commercial and private use.
 
 ### 🏷️ **Version Information**
 - **Current Version**: 2.0.0
