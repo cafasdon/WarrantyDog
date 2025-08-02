@@ -1,18 +1,22 @@
 # WarrantyDog Production Docker Compose Configuration
 # Optimized for production deployment with immediate availability
 
-version: '3.8'
-
 services:
   warrantydog:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: warrantydog-prod
+    ports:
+      - "3001:3001"
+    volumes:
+      # Only persist database data in production
+      - warrantydog-prod-data:/workspace/data
     environment:
       - NODE_ENV=production
       - PORT=3001
+    working_dir: /workspace
     restart: always
-    # Remove development volumes for production
-    volumes:
-      - warrantydog-data:/workspace/data
-    # Production-optimized health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 15s
@@ -30,5 +34,4 @@ services:
           cpus: '0.25'
 
 volumes:
-  warrantydog-data:
-    name: warrantydog-prod-data
+  warrantydog-prod-data:

@@ -59,6 +59,8 @@ chmod +x start-warrantydog.sh
 
 **That's it!** The application will be available at **http://localhost:3001**
 
+> **✅ Universal Compatibility**: Uses Docker's default networking - works on any environment, any network configuration, any Docker setup!
+
 ### 🐳 **Option 2: Manual Docker Commands**
 
 ```bash
@@ -66,17 +68,17 @@ chmod +x start-warrantydog.sh
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Start the application
-docker-compose up --build -d
+# Start the application (uses simple, universal configuration)
+docker-compose -f docker-compose.simple.yml up --build -d
 
 # Check status
-docker-compose ps
+docker-compose -f docker-compose.simple.yml ps
 
 # View logs
-docker-compose logs -f
+docker-compose -f docker-compose.simple.yml logs -f
 
 # Stop when done
-docker-compose down
+docker-compose -f docker-compose.simple.yml down
 ```
 
 ### 🌐 **Access Your Application**

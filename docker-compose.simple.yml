@@ -1,19 +1,16 @@
-version: '3.8'
+# WarrantyDog Simple Docker Compose Configuration
+# Maximum compatibility - works on any Docker environment
 
 services:
   warrantydog:
-    build:
-      context: .
-      dockerfile: Dockerfile.production
+    build: .
     ports:
       - "3001:3001"
-    restart: unless-stopped
+    volumes:
+      - warrantydog-data:/workspace/data
     environment:
       - NODE_ENV=production
-    volumes:
-      # Database persistence for SQLite
-      - warrantydog-data:/app/data
+    restart: unless-stopped
 
 volumes:
   warrantydog-data:
-    driver: local

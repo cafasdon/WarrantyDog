@@ -25,11 +25,11 @@ echo 🔧 Starting WarrantyDog application...
 
 REM Stop any existing containers
 echo 🛑 Stopping any existing WarrantyDog containers...
-docker-compose down >nul 2>&1
+docker-compose -f docker-compose.simple.yml down >nul 2>&1
 
 REM Build and start the application
 echo 🏗️  Building and starting WarrantyDog...
-docker-compose up --build -d
+docker-compose -f docker-compose.simple.yml up --build -d
 
 REM Wait for the application to be ready
 echo ⏳ Waiting for WarrantyDog to be ready...
