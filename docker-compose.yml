@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  warrantydog:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Persistent volume for SQLite database - ensures data survives container restarts
+      - warrantydog-data:/app/data
+      # Persistent volume for logs
+      - warrantydog-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  # Named volume for database persistence
+  warrantydog-data:
+    driver: local
+  # Named volume for logs persistence  
+  warrantydog-logs:
+    driver: local

@@ -996,6 +996,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
                 this.showError(`Processing failed: ${error.message}`);
             }
         } finally {
+            // Stop intelligent rate limiting systems when processing ends
+            this.stopIntelligentRateLimiters();
             this.resetProcessingUI();
         }
     }
@@ -1007,8 +1009,36 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
         console.log('Processing cancelled by user');
         this.processingCancelled = true;
         this.showMessage('⏹️ Processing cancelled by user. Session saved for resume.', 'info');
+
+        // Stop intelligent rate limiting systems
+        this.stopIntelligentRateLimiters();
+
         this.resetProcessingUI();
         // Session is automatically saved after each device, so no additional save needed
+    }
+
+    /**
+     * Stop intelligent rate limiting systems
+     */
+    stopIntelligentRateLimiters() {
+        try {
+            // Stop optimization loops for all intelligent rate limiters
+            if (window.warrantyDogRateLimiters) {
+                Object.values(window.warrantyDogRateLimiters).forEach(rateLimiter => {
+                    if (rateLimiter && typeof rateLimiter.reset === 'function') {
+                        console.log(`🛑 Stopping intelligent rate limiter for ${rateLimiter.vendor}`);
+                        // Reset the system to stop optimization loops
+                        rateLimiter.reset();
+                    }
+                });
+
+                // Clear the global reference to stop any remaining background processes
+                window.warrantyDogRateLimiters = null;
+                console.log('🛑 All intelligent rate limiting systems stopped');
+            }
+        } catch (error) {
+            console.error('Error stopping intelligent rate limiters:', error);
+        }
     }
 
     /**
@@ -1125,6 +1155,21 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             } catch (error) {
                 console.error(`❌ Failed to process ${device.serialNumber}:`, error);
 
+                // Check if this is a circuit breaker issue and pause processing
+                if (error.message.includes('Circuit breaker is OPEN') ||
+                    error.message.includes('rate_limit_exceeded')) {
+
+                    console.log(`🔄 Circuit breaker detected for ${device.vendor}, pausing processing for 2 minutes...`);
+
+                    // Show user-friendly message
+                    this.showInfo(`⏸️ Pausing processing due to ${device.vendor} API rate limits. Will resume automatically in 2 minutes.`);
+
+                    // Wait for circuit breaker recovery time
+                    await new Promise(resolve => setTimeout(resolve, 120000)); // 2 minutes
+
+                    console.log(`🔄 Resuming processing after circuit breaker recovery...`);
+                }
+
                 const errorResult = {
                     vendor: device.vendor,
                     serviceTag: device.serialNumber,
@@ -1220,8 +1265,8 @@ Current columns: ${Object.keys(firstRow).join(', ')}`);
             return;
         }
 
-        // Filter to only supported devices
-        const supportedDevices = devices.filter(device => device.isSupported && device.apiConfigured);
+        // Filter to only supported devices (regardless of API configuration)
+        const supportedDevices = devices.filter(device => device.isSupported);
 
         if (supportedDevices.length === 0) {
             console.log('📋 No supported devices to check cache for');

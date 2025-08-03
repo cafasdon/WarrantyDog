@@ -561,8 +561,6 @@ class LenovoAPI {
     constructor() {
         this.baseUrl = 'https://supportapi.lenovo.com/v2.5';
         this.rateLimiter = rateLimiters.lenovo;
-        this.useIntelligentRateLimiting = true;
-        this.intelligentRateLimiter = getIntelligentRateLimiters().lenovo;
     }
 
     /**

@@ -25,6 +25,7 @@
 
 import winston from 'winston';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -82,6 +83,9 @@ const consoleFormat = winston.format.combine(
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+}
 
 // Configure transports based on environment
 const transports = [];

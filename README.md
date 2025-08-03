@@ -24,7 +24,7 @@ WarrantyDog is a complete warranty management solution that:
 - ✅ **Smart Processing**: Skips unconfigured vendors to save API quotas
 - ✅ **Modern Development**: Vite dev server, secure dependencies
 - ✅ **Docker Ready**: One-command deployment anywhere
-- ✅ **Data Persistence**: SQLite database with session management
+- ✅ **Data Persistence**: SQLite database with Docker volume persistence
 - ✅ **Professional UX**: Real-time updates, error handling, export functionality
 
 ### 🏗️ **Architecture**
@@ -39,6 +39,8 @@ WarrantyDog is a complete warranty management solution that:
 ## 🚀 **Quick Start Guide**
 
 > **🔒 Clean Database Startup**: WarrantyDog starts with a completely empty database. No pre-existing warranty data or session information is included. The application automatically creates and initializes the database schema on first startup.
+
+> **💾 Data Persistence**: All warranty data, API responses, and session information are stored in a persistent SQLite database using Docker volumes. Your data survives container restarts, updates, and system reboots.
 
 ### 📋 **Prerequisites**
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
@@ -66,8 +68,17 @@ iwr -useb https://raw.githubusercontent.com/cafasdon/WarrantyDog/main/install.ps
 ```bash
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
+
+# Option 1: Using Docker Compose (Recommended - includes persistent storage)
+docker-compose up -d
+
+# Option 2: Using startup scripts with persistent storage
+./start-warrantydog.sh    # Linux/macOS
+start-warrantydog.bat     # Windows
+
+# Option 3: Manual Docker run with persistent volumes
 docker build -t warrantydog .
-docker run -d -p 3001:3001 --name warrantydog warrantydog
+docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog warrantydog
 ```
 
 ### 🐳 **Docker Commands**
@@ -342,9 +353,16 @@ npm run dev-server    # Backend development server
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Build and deploy the application
+# Option 1: Docker Compose (Recommended)
+docker-compose up -d
+
+# Option 2: Manual Docker with persistent volumes
 docker build -t warrantydog .
-docker run -d -p 3001:3001 --name warrantydog warrantydog
+docker run -d -p 3001:3001 \
+  -v warrantydog-data:/app/data \
+  -v warrantydog-logs:/app/logs \
+  --name warrantydog-container \
+  warrantydog
 ```
 
 **Benefits:**
@@ -353,7 +371,7 @@ docker run -d -p 3001:3001 --name warrantydog warrantydog
 - ✅ **Consistent environment** across all platforms
 - ✅ **No dependency conflicts** - everything containerized
 - ✅ **Easy scaling** - Docker orchestration ready
-- ✅ **Data persistence** - SQLite database in container volumes
+- ✅ **Data persistence** - SQLite database with Docker volumes (survives restarts)
 
 ### 🌐 **Traditional Server Deployment**
 
@@ -383,6 +401,58 @@ pm2 save
 - **Azure**: Use Container Instances
 - **DigitalOcean**: App Platform with Docker
 - **Heroku**: Use container deployment
+
+---
+
+## 💾 **Data Persistence & Database Management**
+
+### 🗄️ **How Data Persistence Works**
+
+WarrantyDog uses **Docker volumes** to ensure your warranty data, API responses, and session information persist across container restarts, updates, and system reboots.
+
+**What gets stored:**
+- ✅ **Raw API responses** - All vendor API responses for reprocessing
+- ✅ **Warranty data** - Processed warranty information and status
+- ✅ **Session history** - Processing sessions and progress tracking
+- ✅ **Cache data** - Optimized lookups for faster subsequent runs
+
+### 📊 **Database Commands**
+
+**Check database contents:**
+```bash
+# View database statistics and sample data
+docker exec warrantydog-container node check-db.js
+
+# Detailed database debugging
+docker exec warrantydog-container node debug-db.js
+```
+
+**Backup your data:**
+```bash
+# Create backup of database volume
+docker run --rm -v warrantydog-data:/data -v $(pwd):/backup alpine tar czf /backup/warrantydog-backup.tar.gz -C /data .
+
+# Restore from backup
+docker run --rm -v warrantydog-data:/data -v $(pwd):/backup alpine tar xzf /backup/warrantydog-backup.tar.gz -C /data
+```
+
+**Reset database (clean start):**
+```bash
+# Stop container and remove volume
+docker-compose down
+docker volume rm warrantydog-data
+
+# Restart with fresh database
+docker-compose up -d
+```
+
+### 🔄 **Data Migration**
+
+When you reload the same CSV file, WarrantyDog automatically:
+1. **Detects previously processed devices** from the database
+2. **Populates the live display** with cached warranty data
+3. **Shows processing status** for each device
+4. **Skips already processed devices** to save API calls
 
 ---
 
