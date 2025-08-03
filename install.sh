@@ -39,7 +39,7 @@ echo "🔨 Building Docker container..."
 docker build -t warrantydog .
 
 echo "🚀 Starting WarrantyDog application..."
-docker run -d -p 3001:3001 --name warrantydog warrantydog
+docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog warrantydog
 
 # Wait for application to be ready
 echo "⏳ Waiting for application to start..."

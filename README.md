@@ -22,13 +22,13 @@ WarrantyDog is a complete warranty management solution that:
 - ✅ **Enterprise Security**: Rate limiting, security headers, structured logging
 - ✅ **Operational Monitoring**: Real-time metrics and performance tracking
 - ✅ **Smart Processing**: Skips unconfigured vendors to save API quotas
-- ✅ **Modern Development**: Vite dev server, secure dependencies
+- ✅ **Production-Ready**: Optimized for deployment, secure dependencies
 - ✅ **Docker Ready**: One-command deployment anywhere
 - ✅ **Data Persistence**: SQLite database with Docker volume persistence
 - ✅ **Professional UX**: Real-time updates, error handling, export functionality
 
 ### 🏗️ **Architecture**
-- **Frontend**: Modern JavaScript with Vite development server
+- **Frontend**: Modern JavaScript served from Express backend
 - **Backend**: Node.js/Express API proxy with OAuth 2.0 token management
 - **Database**: SQLite for session persistence and caching
 - **Deployment**: Docker containerization for consistent environments
@@ -141,19 +141,23 @@ npm run dev
 ```
 
 **Access Points:**
-- **Backend + Frontend**: http://localhost:3001 (production)
-- **Frontend Only**: http://localhost:8080 (development)
-- **Backend API**: http://localhost:3001/api/
+- **Full Application**: http://localhost:3001 (production & development)
+- **API Endpoints**: http://localhost:3001/api/*
+- **Health Check**: http://localhost:3001/api/health
+- **Metrics**: http://localhost:3001/api/metrics
 
 ### 🔧 **Development Commands**
 ```bash
-npm run dev          # Start Vite development server (port 8080)
+npm start            # Start production server (port 3001)
 npm run server       # Start backend API server (port 3001)
-npm run dev-server   # Start backend with auto-restart
-npm run lint         # Check code quality
-npm run format       # Format code with Prettier
-npm run validate     # Run lint + format
+npm run dev-server   # Start backend with auto-restart (requires nodemon)
+npm run dev          # Development info (static files served from backend)
+npm run lint         # Code quality info (development tools not included)
+npm run format       # Code formatting info (development tools not included)
+npm run validate     # Validation info (development tools not included)
 ```
+
+> **📝 Note**: This is a production-focused build. Development tools like ESLint, Prettier, and Vite are not included to keep the container lightweight. For development, you can add these tools as needed.
 
 ---
 

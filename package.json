@@ -5,7 +5,13 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "server": "node server.js",
+    "dev-server": "nodemon server.js",
+    "dev": "echo 'Note: This application serves static files from the backend. Use npm run server for development.'",
+    "lint": "echo 'Note: ESLint not configured. Run npm run validate to install development tools.'",
+    "format": "echo 'Note: Prettier not configured. Run npm run validate to install development tools.'",
+    "validate": "echo 'Note: Development tools not installed. This is a production-focused build.'"
   },
   "keywords": [
     "warranty",

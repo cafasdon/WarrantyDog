@@ -40,7 +40,7 @@ Write-Host "🔨 Building Docker container..." -ForegroundColor Cyan
 docker build -t warrantydog .
 
 Write-Host "🚀 Starting WarrantyDog application..." -ForegroundColor Cyan
-docker run -d -p 3001:3001 --name warrantydog warrantydog | Out-Null
+docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog warrantydog | Out-Null
 
 # Wait for application to be ready
 Write-Host "⏳ Waiting for application to start..." -ForegroundColor Cyan
