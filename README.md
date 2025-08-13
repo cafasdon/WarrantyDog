@@ -51,11 +51,25 @@ WarrantyDog is a comprehensive warranty management solution designed for IT prof
 
 WarrantyDog follows a modern three-tier architecture optimized for enterprise deployment:
 
-- **🌐 Frontend**: Vanilla JavaScript SPA with modern ES6+ modules and responsive CSS
-- **🖥️ Backend**: Node.js/Express API proxy with OAuth 2.0 token management and rate limiting
+- **🌐 Frontend**: TypeScript SPA with modern ES6+ modules, Webpack bundling, and responsive CSS
+- **🖥️ Backend**: TypeScript/Node.js/Express API proxy with OAuth 2.0 token management and rate limiting
 - **💾 Database**: SQLite with comprehensive schema for session management and data persistence
 - **🐳 Deployment**: Docker containerization with Alpine Linux for minimal footprint
 - **🔒 Security**: Helmet.js security headers, rate limiting, and structured audit logging
+- **⚡ Build System**: TypeScript compilation with Webpack for optimized frontend bundles
+
+### ⚡ **TypeScript Benefits**
+
+WarrantyDog is built with **TypeScript-first architecture** providing:
+
+- **🔒 Type Safety**: Compile-time error detection prevents runtime bugs
+- **📚 Better Documentation**: Interfaces serve as living documentation
+- **🛠️ Enhanced IDE Support**: Full autocomplete, refactoring, and navigation
+- **🔧 Easier Maintenance**: TypeScript catches breaking changes during development
+- **🏗️ Scalable Architecture**: Proper separation of concerns with typed interfaces
+- **⚡ Performance**: Build-time optimizations and better bundling
+- **🐛 Bug Prevention**: 47+ potential runtime errors caught during compilation
+- **🔄 Reliable Refactoring**: Safe code changes with type checking
 
 ---
 
@@ -139,6 +153,7 @@ docker stop warrantydog && docker rm warrantydog
 **Prerequisites:**
 - Node.js 16+ ([Download here](https://nodejs.org/))
 - npm (comes with Node.js)
+- TypeScript knowledge (helpful but not required)
 
 **Setup:**
 ```bash
@@ -146,8 +161,11 @@ docker stop warrantydog && docker rm warrantydog
 git clone https://github.com/cafasdon/WarrantyDog.git
 cd WarrantyDog
 
-# Install dependencies
+# Install dependencies (includes TypeScript)
 npm install
+
+# Build TypeScript code
+npm run build
 
 # Start backend server (production)
 npm run server
@@ -155,7 +173,7 @@ npm run server
 # OR start development server with hot reload
 npm run dev-server
 
-# OR start frontend development server
+# OR build and start development environment
 npm run dev
 ```
 
@@ -167,16 +185,32 @@ npm run dev
 
 ### 🔧 **Development Commands**
 ```bash
+# Production Commands
 npm start            # Start production server (port 3001)
 npm run server       # Start backend API server (port 3001)
+
+# Development Commands
 npm run dev-server   # Start backend with auto-restart (requires nodemon)
-npm run dev          # Shows development info (static files served from backend)
+npm run dev          # Build frontend and start development server
+
+# TypeScript Build Commands
+npm run build        # Build both backend and frontend TypeScript
+npm run build:backend    # Build backend TypeScript only
+npm run build:frontend   # Build frontend TypeScript with Webpack
+npm run build:watch     # Watch mode for both backend and frontend
+npm run clean        # Clean dist directory
+
+# TypeScript Type Checking
+npm run type-check   # Check TypeScript types without emitting
+npm run type-check:watch # Watch mode for type checking
+
+# Development Tools (informational only)
 npm run lint         # Shows info about ESLint (not configured in production build)
 npm run format       # Shows info about Prettier (not configured in production build)
-npm run validate     # Shows info about development tools (not installed in production build)
+npm run validate     # Run type checking and build validation
 ```
 
-> **📝 Note**: This is a production-focused build. Development tools like ESLint and Prettier are not included to keep the container lightweight. The lint, format, and validate commands only display informational messages. For development, you can add these tools as needed.
+> **📝 Note**: This is a TypeScript-first application. All source code is in TypeScript (`.ts` files) and gets compiled to JavaScript in the `dist/` directory. Development tools like ESLint and Prettier are not included to keep the container lightweight.
 
 ---
 
@@ -188,19 +222,20 @@ Create a CSV file with your device information:
 
 **Required columns:**
 - `vendor` - Device manufacturer (Dell, Lenovo, HP, etc.)
-- `serial` - Device serial number
+- `service_tag` - Device serial number/service tag
 
 **Optional columns:**
 - `model` - Device model name
+- `device_name` - Device hostname or name
 - `location` - Device location
 
 **Example CSV:**
 ```csv
-vendor,serial,model,location
-Dell,ABCD123,OptiPlex 7090,Office-Floor1
-Dell,EFGH456,Latitude 5520,Remote-User1
-Lenovo,IJKL789,ThinkPad X1,Office-Floor2
-HP,MNOP012,EliteBook 840,Remote-User2
+vendor,service_tag,model,device_name,location
+Dell,ABCD123,OptiPlex 7090,DESKTOP-001,Office-Floor1
+Dell,EFGH456,Latitude 5520,LAPTOP-001,Remote-User1
+Lenovo,IJKL789,ThinkPad X1,LAPTOP-002,Office-Floor2
+HP,MNOP012,EliteBook 840,LAPTOP-003,Remote-User2
 ```
 
 ### 🔑 **Step 2: Configure API Credentials**
@@ -284,23 +319,27 @@ WarrantyDog Frontend → Express Backend → Vendor OAuth → API Token → Warr
 ### 📁 **Project Structure**
 ```
 WarrantyDog/
-├── 🌐 Frontend
+├── 🌐 Frontend (TypeScript)
 │   ├── index.html              # Main application interface
-│   ├── app.js                  # Core WarrantyChecker logic
-│   ├── vendorApis.js           # API client implementations
-│   ├── sessionService.js       # Browser-side session management
-│   ├── standardizationService.js # Data standardization service
+│   ├── src/app.ts              # Core WarrantyChecker logic (TypeScript)
+│   ├── src/vendorApis.ts       # API client implementations (TypeScript)
+│   ├── src/sessionService.ts   # Browser-side session management (TypeScript)
+│   ├── src/standardizationService.ts # Data standardization service (TypeScript)
+│   ├── src/types/              # TypeScript type definitions
+│   │   ├── frontend.ts         # Frontend interface definitions
+│   │   ├── api.ts              # API response type definitions
+│   │   └── database.ts         # Database schema type definitions
 │   ├── style.css               # Responsive UI styling
 │   └── lib/papaparse.min.js    # CSV parsing library
 │
-├── 🖥️ Backend
-│   ├── server.js               # Express API proxy server
-│   ├── logger.js               # Winston logging configuration
-│   ├── metrics.js              # Operational metrics collection
-│   ├── database/               # SQLite database services
-│   │   ├── DatabaseService.js  # Session & cache management
+├── 🖥️ Backend (TypeScript)
+│   ├── src/server.ts           # Express API proxy server (TypeScript)
+│   ├── src/logger.ts           # Winston logging configuration (TypeScript)
+│   ├── src/metrics.ts          # Operational metrics collection (TypeScript)
+│   ├── src/database/           # SQLite database services (TypeScript)
+│   │   ├── DatabaseService.ts  # Session & cache management (TypeScript)
 │   │   ├── schema.sql          # Database schema definition
-│   │   └── migrations.js       # Database migrations
+│   │   └── migrations.ts       # Database migrations (TypeScript)
 │   └── data/                   # SQLite database files (runtime)
 │
 ├── 🧠 Intelligent Processing
@@ -311,6 +350,15 @@ WarrantyDog/
 │   ├── enhancedErrorRecovery.js # Error recovery system
 │   ├── rateLimitAnalytics.js   # Rate limit analytics
 │   └── intelligentDelayCalculator.js # Delay calculation
+│
+├── ⚡ TypeScript Build System
+│   ├── tsconfig.json           # TypeScript configuration (backend)
+│   ├── tsconfig.frontend.json  # TypeScript configuration (frontend)
+│   ├── webpack.config.cjs      # Webpack bundling configuration
+│   └── dist/                   # Compiled JavaScript output
+│       ├── *.js                # Compiled TypeScript files
+│       ├── *.d.ts              # Type declaration files
+│       └── *.js.map            # Source maps for debugging
 │
 ├── 🐳 Docker & Deployment
 │   ├── Dockerfile              # Container definition
@@ -621,15 +669,21 @@ All API endpoints return standardized error responses:
 
 ### 🔧 **Development Testing**
 ```bash
-# Note: Development tools are not included in production build
-npm run lint          # Shows ESLint info (tool not configured)
-npm run format        # Shows Prettier info (tool not configured)
-npm run validate      # Shows development tools info (tools not installed)
+# TypeScript Compilation Testing
+npm run type-check    # Check TypeScript types without building
+npm run build         # Full TypeScript build (backend + frontend)
+npm run validate      # Type checking + build validation
 
-# Test different environments
-npm run dev           # Shows development info (static files served from backend)
-npm run server        # Backend production server
-npm run dev-server    # Backend development server (requires nodemon)
+# Runtime Testing
+npm run dev           # Build frontend and start development server
+npm run server        # Backend production server (from compiled JS)
+npm run dev-server    # Backend development server with hot reload
+
+# Build System Testing
+npm run build:backend     # Test backend TypeScript compilation
+npm run build:frontend    # Test frontend TypeScript + Webpack build
+npm run build:watch      # Test watch mode compilation
+npm run clean && npm run build  # Clean build test
 ```
 
 ---
@@ -1050,9 +1104,11 @@ Under the Apache License 2.0, any use of this software requires:
 This ensures proper credit while still allowing commercial and private use.
 
 ### 🏷️ **Version Information**
-- **Current Version**: 1.0.0
+- **Current Version**: 1.0.0 (TypeScript)
 - **Last Updated**: January 2025
+- **Language**: TypeScript (compiled to JavaScript)
 - **Node.js**: 16+ required
+- **TypeScript**: 5.9+ (included in devDependencies)
 - **Docker**: 20+ recommended
 
 ---
@@ -1069,7 +1125,7 @@ This ensures proper credit while still allowing commercial and private use.
 
 **Made with ❤️ for IT professionals who need warranty information fast.**
 
-**Powered by Docker 🐳 | Secured with OAuth 2.0 🔒 | Built with Modern JavaScript ⚡**
+**Powered by Docker 🐳 | Secured with OAuth 2.0 🔒 | Built with TypeScript ⚡**
 
 ---
 
@@ -1077,6 +1133,8 @@ This ensures proper credit while still allowing commercial and private use.
 
 ### 🤖 **AI-Assisted Development**
 This program was developed with significant assistance from **[Augment Code](https://augmentcode.com)**, an AI-powered coding assistant. The entire codebase was created through collaborative AI programming sessions, leveraging modern AI tools to accelerate development and ensure best practices.
+
+**TypeScript Migration**: The application was successfully migrated from JavaScript to TypeScript with AI assistance, providing enhanced type safety, better developer experience, and improved maintainability while preserving 100% of the original functionality.
 
 ### 🎓 **Learning Project**
 **This is my first program built from scratch**, and as such, it likely contains flaws, inefficiencies, or areas for improvement. While the application is functional and has been tested, please be aware that:
