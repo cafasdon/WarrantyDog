@@ -1,38 +1,62 @@
 
 # WarrantyDog 🐕
 
-**A modern, browser-based warranty checker that fetches warranty information from multiple hardware vendors using their APIs.**
+**A modern, enterprise-grade warranty checker that fetches warranty information from multiple hardware vendors using their APIs.**
 
-✅ **Production Ready** | 🐳 **Docker Containerized** | 🔒 **Secure OAuth 2.0** | 🚀 **Modern Stack**
+✅ **Production Ready** | 🐳 **Docker Containerized** | 🔒 **Secure OAuth 2.0** | 🚀 **Modern Stack** | 💾 **SQLite Database**
 
 ---
 
 ## 🎯 **What is WarrantyDog?**
 
-WarrantyDog is a complete warranty management solution that:
-- **Processes CSV files** with device information
-- **Fetches warranty data** from vendor APIs (Dell, Lenovo, HP)
-- **Provides real-time progress** tracking with cancellation
-- **Exports complete results** to CSV
-- **Runs anywhere** with Docker containerization
+WarrantyDog is a comprehensive warranty management solution designed for IT professionals and system administrators who need to efficiently track hardware warranty status across multiple vendors. The application provides:
+
+- **📊 CSV File Processing**: Upload device lists and get warranty information for hundreds of devices
+- **🔌 Multi-Vendor API Integration**: Currently supports Dell and Lenovo with HP coming soon
+- **⚡ Real-time Progress Tracking**: Live updates with cancellation support and retry functionality
+- **💾 Persistent Session Management**: SQLite database ensures data survives container restarts
+- **📤 Complete Results Export**: Export warranty data to CSV with all available information
+- **🐳 Docker Deployment**: One-command deployment with volume persistence
 
 ### ✨ **Key Features**
-- ✅ **Dell OAuth 2.0 Integration**: Full API authentication with rate limiting
-- ✅ **Lenovo API Support**: Complete warranty lookup functionality
-- ✅ **Enterprise Security**: Rate limiting, security headers, structured logging
-- ✅ **Operational Monitoring**: Real-time metrics and performance tracking
-- ✅ **Smart Processing**: Skips unconfigured vendors to save API quotas
-- ✅ **Production-Ready**: Optimized for deployment, secure dependencies
-- ✅ **Docker Ready**: One-command deployment anywhere
-- ✅ **Data Persistence**: SQLite database with Docker volume persistence
-- ✅ **Professional UX**: Real-time updates, error handling, export functionality
 
-### 🏗️ **Architecture**
-- **Frontend**: Modern JavaScript served from Express backend
-- **Backend**: Node.js/Express API proxy with OAuth 2.0 token management
-- **Database**: SQLite for session persistence and caching
-- **Deployment**: Docker containerization for consistent environments
-- **Security**: Fixed all high/medium vulnerabilities, modern dependency stack
+#### 🔐 **Enterprise Security & Authentication**
+- ✅ **Dell OAuth 2.0 Integration**: Secure API authentication with automatic token management
+- ✅ **Lenovo API Support**: ClientID-based authentication for warranty lookups
+- ✅ **Rate Limiting Protection**: Intelligent rate limiting with automatic retry scheduling
+- ✅ **Security Headers**: Helmet.js integration with CSP and security best practices
+- ✅ **Structured Logging**: Winston-based logging with security event tracking
+
+#### 🚀 **Advanced Processing Capabilities**
+- ✅ **Intelligent Concurrent Processing**: Optimized batch processing with adaptive rate limiting
+- ✅ **Smart Duplicate Detection**: Cross-session caching prevents redundant API calls
+- ✅ **Error Recovery**: Automatic retry logic with exponential backoff
+- ✅ **Session Persistence**: Resume processing after interruptions or container restarts
+- ✅ **Vendor Support Detection**: Automatically skips unsupported vendors to save API quotas
+
+#### 💾 **Data Management & Persistence**
+- ✅ **SQLite Database**: Comprehensive schema for sessions, devices, and API responses
+- ✅ **Docker Volume Persistence**: Data survives container updates and restarts
+- ✅ **API Response Caching**: Stores raw API responses for reprocessing and debugging
+- ✅ **Processing History**: Complete audit trail of all warranty lookup attempts
+- ✅ **Database Health Monitoring**: Built-in health checks and cleanup recommendations
+
+#### 🎨 **Professional User Experience**
+- ✅ **Modern Web Interface**: Responsive design with real-time progress indicators
+- ✅ **Drag & Drop CSV Upload**: Intuitive file handling with validation
+- ✅ **Live Statistics**: Real-time counters for processed, successful, failed, and skipped devices
+- ✅ **Cancel & Resume**: Stop processing anytime and resume from where you left off
+- ✅ **Export Functionality**: Download complete results with warranty details and status
+
+### 🏗️ **Technical Architecture**
+
+WarrantyDog follows a modern three-tier architecture optimized for enterprise deployment:
+
+- **🌐 Frontend**: Vanilla JavaScript SPA with modern ES6+ modules and responsive CSS
+- **🖥️ Backend**: Node.js/Express API proxy with OAuth 2.0 token management and rate limiting
+- **💾 Database**: SQLite with comprehensive schema for session management and data persistence
+- **🐳 Deployment**: Docker containerization with Alpine Linux for minimal footprint
+- **🔒 Security**: Helmet.js security headers, rate limiting, and structured audit logging
 
 ---
 
@@ -157,7 +181,7 @@ npm run format       # Code formatting info (development tools not included)
 npm run validate     # Validation info (development tools not included)
 ```
 
-> **📝 Note**: This is a production-focused build. Development tools like ESLint, Prettier, and Vite are not included to keep the container lightweight. For development, you can add these tools as needed.
+> **📝 Note**: This is a production-focused build. Development tools like ESLint and Prettier are not included to keep the container lightweight. For development, you can add these tools as needed.
 
 ---
 
@@ -313,6 +337,248 @@ WarrantyDog/
 - ✅ **Performance Tracking** - Response time analysis and error monitoring
 - ✅ **Security Events** - Rate limiting and security incident logging
 - ✅ **System Monitoring** - Memory usage, uptime, and resource tracking
+
+---
+
+## 📡 **API Documentation**
+
+WarrantyDog provides a comprehensive REST API for integration with other systems and automation tools.
+
+### 🔗 **Base URL**
+```
+http://localhost:3001/api
+```
+
+### 🏥 **Health & Status Endpoints**
+
+#### Health Check
+```http
+GET /api/health
+```
+Returns server health status and database connectivity.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "message": "WarrantyDog API proxy server is running",
+  "timestamp": "2025-01-13T10:30:00.000Z",
+  "uptime": 3600,
+  "environment": "production",
+  "version": "1.0.0",
+  "services": {
+    "api": "operational",
+    "proxy": "operational",
+    "database": "ok"
+  }
+}
+```
+
+#### Readiness Check
+```http
+GET /api/ready
+```
+Returns whether the server is ready to accept requests.
+
+#### Metrics
+```http
+GET /api/metrics
+```
+Returns operational metrics including request counts, response times, and vendor API statistics.
+
+### 🔌 **Vendor API Proxy Endpoints**
+
+#### Dell Warranty Lookup
+```http
+GET /api/dell/warranty/{serviceTag}
+Headers:
+  X-Dell-Api-Key: your-api-key
+  X-Dell-Api-Secret: your-api-secret
+```
+
+**Example:**
+```bash
+curl -X GET "http://localhost:3001/api/dell/warranty/ABC1234" \
+  -H "X-Dell-Api-Key: your-key" \
+  -H "X-Dell-Api-Secret: your-secret"
+```
+
+#### Lenovo Warranty Lookup
+```http
+POST /api/lenovo/warranty
+Headers:
+  X-Lenovo-Client-Id: your-client-id
+  Content-Type: application/x-www-form-urlencoded
+Body:
+  Serial=your-serial-number
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:3001/api/lenovo/warranty" \
+  -H "X-Lenovo-Client-Id: your-client-id" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "Serial=LEN001"
+```
+
+### 💾 **Session Management Endpoints**
+
+#### Get Active Sessions
+```http
+GET /api/sessions
+```
+Returns list of all active processing sessions.
+
+#### Get Session Details
+```http
+GET /api/sessions/{sessionId}
+```
+Returns detailed session information including devices and progress.
+
+#### Create New Session
+```http
+POST /api/sessions
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "sessionId": "session_123",
+  "fileName": "devices.csv",
+  "devices": [
+    {
+      "vendor": "Dell",
+      "serialNumber": "ABC1234",
+      "model": "OptiPlex 7090",
+      "location": "Office-Floor1"
+    }
+  ],
+  "options": {
+    "skipDuplicates": true,
+    "maxAgeHours": 24
+  }
+}
+```
+
+#### Update Session Progress
+```http
+PUT /api/sessions/{sessionId}/progress
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "processed": 10,
+  "successful": 8,
+  "failed": 1,
+  "skipped": 1
+}
+```
+
+### 🗄️ **Database & Cache Endpoints**
+
+#### Get Cached Warranty Data
+```http
+POST /api/cached-warranty
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "vendor": "dell",
+  "serviceTag": "ABC1234",
+  "maxAgeHours": 24
+}
+```
+
+#### Get Database Statistics
+```http
+GET /api/database/stats
+```
+Returns comprehensive database statistics including session counts, device counts, and cache hit rates.
+
+#### Get Failed Parsing Responses
+```http
+GET /api/failed-parsing?vendor=dell&limit=100
+```
+Returns API responses that failed to parse for reprocessing.
+
+### 🔄 **Device Management Endpoints**
+
+#### Get Device by Serial Number
+```http
+GET /api/sessions/{sessionId}/devices/{serialNumber}
+```
+
+#### Update Device State
+```http
+PUT /api/devices/{deviceId}/state
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "processing_state": "success",
+  "warranty_status": "Active",
+  "warranty_end_date": "2025-12-31",
+  "warranty_type": "ProSupport"
+}
+```
+
+#### Get Retryable Devices
+```http
+GET /api/sessions/{sessionId}/retryable
+```
+Returns devices that failed processing but can be retried.
+
+### 📊 **Bulk Operations**
+
+#### Bulk Warranty Data Lookup
+```http
+POST /api/warranty-data/bulk
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "devices": [
+    {"vendor": "dell", "serviceTag": "ABC1234"},
+    {"vendor": "lenovo", "serviceTag": "LEN001"}
+  ]
+}
+```
+
+### 🚨 **Error Responses**
+
+All API endpoints return standardized error responses:
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable error message",
+  "details": "Additional error details",
+  "timestamp": "2025-01-13T10:30:00.000Z"
+}
+```
+
+**Common Error Codes:**
+- `rate_limit_exceeded` - API rate limit reached
+- `authentication_required` - Missing or invalid API credentials
+- `invalid_request` - Malformed request data
+- `vendor_api_error` - Upstream vendor API error
+- `database_error` - Database operation failed
+
+### 🔒 **Authentication & Rate Limiting**
+
+- **Rate Limiting**: 100 requests per 15 minutes per IP address
+- **Vendor APIs**: Require specific headers for authentication
+- **CORS**: Enabled for browser-based applications
+- **Security Headers**: Helmet.js protection enabled
 
 ---
 
@@ -521,13 +787,13 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-**Vite dev server issues:**
+**Development server issues:**
 ```bash
-# Check port 8080 is available
-npm run dev -- --port 8081
+# Check port 3001 is available
+lsof -i :3001
 
-# Clear Vite cache
-rm -rf node_modules/.vite
+# Kill process using port 3001
+kill -9 $(lsof -t -i:3001)
 ```
 
 ### 📊 **Data Issues**
@@ -584,6 +850,155 @@ git push origin feature/your-feature-name
 
 ---
 
+## 🤝 **Contributing**
+
+We welcome contributions from the community! WarrantyDog is an open-source project that benefits from diverse perspectives and expertise.
+
+### 🚀 **How to Contribute**
+
+#### 🐛 **Reporting Bugs**
+1. **Check existing issues** to avoid duplicates
+2. **Use the bug report template** when creating new issues
+3. **Include detailed information**:
+   - Operating system and version
+   - Docker version (if using containers)
+   - Node.js version (if running locally)
+   - Steps to reproduce the issue
+   - Expected vs actual behavior
+   - Screenshots or logs if applicable
+
+#### ✨ **Suggesting Features**
+1. **Check the roadmap** in GitHub Issues
+2. **Open a feature request** with detailed description
+3. **Explain the use case** and business value
+4. **Consider implementation complexity** and maintenance impact
+
+#### 🔧 **Code Contributions**
+
+**Development Setup:**
+```bash
+# Fork the repository on GitHub
+git clone https://github.com/your-username/WarrantyDog.git
+cd WarrantyDog
+
+# Install dependencies
+npm install
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make your changes and test thoroughly
+npm run server  # Test backend
+# Open http://localhost:3001 and test frontend
+
+# Commit with descriptive messages
+git commit -m "feat: add HP warranty API integration"
+
+# Push and create pull request
+git push origin feature/your-feature-name
+```
+
+**Code Standards:**
+- ✅ **ES6+ JavaScript** with modern syntax
+- ✅ **Consistent formatting** (we recommend Prettier)
+- ✅ **Descriptive variable names** and comments
+- ✅ **Error handling** for all async operations
+- ✅ **Security best practices** (no hardcoded secrets)
+
+#### 📝 **Documentation Contributions**
+- **README improvements** - clarify instructions, fix typos
+- **Code comments** - explain complex logic
+- **API documentation** - document new endpoints
+- **Examples** - provide sample CSV files or use cases
+
+### 🔍 **Development Guidelines**
+
+#### 🧪 **Testing Requirements**
+- **Manual testing** of all changes
+- **Cross-browser compatibility** (Chrome, Firefox, Safari, Edge)
+- **Docker deployment testing** to ensure containerization works
+- **API endpoint testing** with various inputs and edge cases
+
+#### 🔒 **Security Considerations**
+- **Never commit API keys** or sensitive credentials
+- **Validate all user inputs** to prevent injection attacks
+- **Use parameterized queries** for database operations
+- **Follow OWASP security guidelines**
+
+#### 📦 **Dependency Management**
+- **Minimize new dependencies** - justify each addition
+- **Keep dependencies updated** - regularly check for security updates
+- **Use exact versions** in package.json for reproducible builds
+- **Document breaking changes** in dependency updates
+
+### 🎯 **Priority Areas for Contribution**
+
+#### 🔥 **High Priority**
+- **HP API Integration** - Complete the HP warranty lookup functionality
+- **Microsoft Surface Support** - Add Microsoft warranty API
+- **ASUS/Acer Support** - Expand vendor coverage
+- **Enhanced Error Recovery** - Improve retry logic and error handling
+
+#### 📊 **Medium Priority**
+- **Advanced Reporting** - Export formats (Excel, PDF)
+- **Bulk Import Improvements** - Better CSV validation and error reporting
+- **Performance Optimization** - Database query optimization
+- **UI/UX Enhancements** - Mobile responsiveness, accessibility
+
+#### 🔧 **Technical Debt**
+- **Code Refactoring** - Improve modularity and maintainability
+- **Test Coverage** - Add automated testing framework
+- **Documentation** - Improve inline code documentation
+- **Monitoring** - Enhanced logging and metrics
+
+### 📋 **Pull Request Process**
+
+1. **Fork the repository** and create a feature branch
+2. **Make your changes** with clear, focused commits
+3. **Test thoroughly** in both development and Docker environments
+4. **Update documentation** if you're changing functionality
+5. **Submit a pull request** with:
+   - Clear description of changes
+   - Reference to related issues
+   - Screenshots for UI changes
+   - Testing instructions
+
+### 🏷️ **Commit Message Guidelines**
+
+Use conventional commit format:
+```
+type(scope): description
+
+feat(api): add HP warranty lookup endpoint
+fix(ui): resolve CSV upload validation issue
+docs(readme): update installation instructions
+refactor(db): optimize session query performance
+```
+
+**Types:**
+- `feat` - New features
+- `fix` - Bug fixes
+- `docs` - Documentation changes
+- `refactor` - Code refactoring
+- `perf` - Performance improvements
+- `test` - Adding tests
+- `chore` - Maintenance tasks
+
+### 🎖️ **Recognition**
+
+Contributors will be recognized in:
+- **GitHub Contributors** section
+- **Release notes** for significant contributions
+- **README acknowledgments** for major features
+
+### 📞 **Getting Help**
+
+- **GitHub Discussions** - Ask questions and share ideas
+- **GitHub Issues** - Report bugs and request features
+- **Code Review** - Get feedback on your contributions
+
+---
+
 ## 📚 **Additional Resources**
 
 ### 🔗 **Useful Links**
@@ -596,7 +1011,7 @@ git push origin feature/your-feature-name
 - **CSV Processing**: [PapaParse Documentation](https://www.papaparse.com/docs)
 - **Express.js**: [Express Guide](https://expressjs.com/en/guide/)
 - **SQLite**: [SQLite Documentation](https://sqlite.org/docs.html)
-- **Vite**: [Vite Guide](https://vitejs.dev/guide/)
+- **Winston Logging**: [Winston Documentation](https://github.com/winstonjs/winston)
 
 ---
 
@@ -614,8 +1029,8 @@ Under the Apache License 2.0, any use of this software requires:
 This ensures proper credit while still allowing commercial and private use.
 
 ### 🏷️ **Version Information**
-- **Current Version**: 2.0.0
-- **Last Updated**: August 2025
+- **Current Version**: 1.0.0
+- **Last Updated**: January 2025
 - **Node.js**: 16+ required
 - **Docker**: 20+ recommended
 
@@ -626,7 +1041,7 @@ This ensures proper credit while still allowing commercial and private use.
 ✅ **Production Ready** - Fully functional warranty checking system
 🔒 **Security Hardened** - All vulnerabilities fixed, modern dependencies
 🐳 **Docker Optimized** - One-command deployment anywhere
-🚀 **Modern Stack** - Vite, Express, SQLite, OAuth 2.0
+🚀 **Modern Stack** - Node.js, Express, SQLite, OAuth 2.0
 📊 **Enterprise Ready** - Session management, caching, rate limiting
 
 ---
