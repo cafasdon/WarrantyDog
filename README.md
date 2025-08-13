@@ -87,6 +87,8 @@ docker-compose up -d
 
 **That's it!** Open http://localhost:3001 in your browser.
 
+**🧪 Verify your setup:** Run `powershell -ExecutionPolicy Bypass -File verify-docker-setup.ps1` to test everything is working.
+
 > **🔒 Clean Database Startup**: WarrantyDog starts with a completely empty database. No pre-existing warranty data or session information is included. The application automatically creates and initializes the database schema on first startup.
 
 > **💾 Data Persistence**: All warranty data, API responses, and session information are stored in a persistent SQLite database using Docker volumes. Your data survives container restarts, updates, and system reboots.
