@@ -170,13 +170,13 @@ npm run dev
 npm start            # Start production server (port 3001)
 npm run server       # Start backend API server (port 3001)
 npm run dev-server   # Start backend with auto-restart (requires nodemon)
-npm run dev          # Development info (static files served from backend)
-npm run lint         # Code quality info (development tools not included)
-npm run format       # Code formatting info (development tools not included)
-npm run validate     # Validation info (development tools not included)
+npm run dev          # Shows development info (static files served from backend)
+npm run lint         # Shows info about ESLint (not configured in production build)
+npm run format       # Shows info about Prettier (not configured in production build)
+npm run validate     # Shows info about development tools (not installed in production build)
 ```
 
-> **📝 Note**: This is a production-focused build. Development tools like ESLint and Prettier are not included to keep the container lightweight. For development, you can add these tools as needed.
+> **📝 Note**: This is a production-focused build. Development tools like ESLint and Prettier are not included to keep the container lightweight. The lint, format, and validate commands only display informational messages. For development, you can add these tools as needed.
 
 ---
 
@@ -617,21 +617,19 @@ All API endpoints return standardized error responses:
 7. **Export Results**: Verify CSV export works
 
 ### 📊 **Sample Data Files**
-- `examples/sample-devices.csv` - Mixed vendor test data
-- `examples/test-dell.csv` - Dell-specific devices
-- `examples/test-lenovo.csv` - Lenovo-specific devices
+- `examples/sample-devices.csv` - Mixed vendor test data with Dell and Lenovo devices
 
 ### 🔧 **Development Testing**
 ```bash
-# Run code quality checks
-npm run lint          # ESLint code analysis
-npm run format        # Prettier code formatting
-npm run validate      # Run both lint + format
+# Note: Development tools are not included in production build
+npm run lint          # Shows ESLint info (tool not configured)
+npm run format        # Shows Prettier info (tool not configured)
+npm run validate      # Shows development tools info (tools not installed)
 
 # Test different environments
-npm run dev           # Frontend development server
+npm run dev           # Shows development info (static files served from backend)
 npm run server        # Backend production server
-npm run dev-server    # Backend development server
+npm run dev-server    # Backend development server (requires nodemon)
 ```
 
 ---
@@ -854,8 +852,8 @@ npm install && npm run dev-server
 ```
 
 ### 📝 **Making Changes**
-1. **Code Style**: Run `npm run validate` before committing
-2. **Testing**: Test your changes thoroughly
+1. **Code Style**: Follow consistent JavaScript formatting (development tools not included in production build)
+2. **Testing**: Test your changes thoroughly in both development and Docker environments
 3. **Documentation**: Update README if needed
 4. **Commit Messages**: Use clear, descriptive commit messages
 
