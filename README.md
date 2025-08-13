@@ -1,4 +1,3 @@
-
 # WarrantyDog 🐕
 
 **A modern, enterprise-grade warranty checker that fetches warranty information from multiple hardware vendors using their APIs.**
@@ -103,11 +102,7 @@ start-warrantydog.bat     # Windows
 # Option 3: Manual Docker run with persistent volumes
 docker build -t warrantydog .
 docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog warrantydog
-```
 
-### 🐳 **Docker Commands**
-
-```bash
 # Build the image
 docker build -t warrantydog .
 
@@ -1090,6 +1085,7 @@ Special thanks to:
 ---
 
 *Built with curiosity, powered by AI, and improved through community collaboration.* 🚀
+
 
 
 
