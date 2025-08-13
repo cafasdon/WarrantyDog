@@ -372,6 +372,9 @@ class WarrantyChecker {
         throw new Error('CSV parser not available');
       }
 
+      // Clear previous session and data when loading new CSV
+      await this.clearPreviousSessionData();
+
       const parseResult = window.Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
@@ -541,6 +544,58 @@ class WarrantyChecker {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Clear previous session data when loading new CSV
+   */
+  private async clearPreviousSessionData(): Promise<void> {
+    try {
+      // Clear previous session if it exists
+      if (this.sessionId && window.sessionService) {
+        console.log('Clearing previous session:', this.sessionId);
+        await window.sessionService.updateSessionProgress(this.sessionId, {
+          processed: this.csvData.length,
+          successful: 0,
+          failed: 0,
+          skipped: 0,
+          total: this.csvData.length,
+          percentage: 100
+        });
+        window.sessionService.clearCurrentSession();
+      }
+
+      // Reset all state variables
+      this.sessionId = null;
+      this.csvData = [];
+      this.processedResults = [];
+      this.currentIndex = 0;
+      this.isProcessing = false;
+      this.processingCancelled = false;
+      this.resumeData = null;
+      this.uniqueDevices = null;
+      this.metrics = null;
+
+      // Clear UI elements
+      this.clearResultsDisplay();
+
+      // Reset processing button
+      if (this.elements.processBtn) {
+        const btn = this.elements.processBtn as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = 'Process Warranty Data';
+      }
+
+      // Hide clear session button
+      if (this.elements.clearSessionBtn) {
+        (this.elements.clearSessionBtn as HTMLElement).style.display = 'none';
+      }
+
+      console.log('Previous session data cleared successfully');
+    } catch (error) {
+      console.warn('Error clearing previous session data:', error);
+      // Continue anyway - don't block new CSV loading
+    }
   }
 
   /**
@@ -1321,6 +1376,60 @@ class WarrantyChecker {
         }
       }, 5000);
     }
+  }
+
+  /**
+   * Clear the results display and reset UI
+   */
+  private clearResultsDisplay(): void {
+    // Hide results container
+    if (this.elements.resultsContainer) {
+      (this.elements.resultsContainer as HTMLElement).style.display = 'none';
+    }
+
+    // Clear table
+    if (this.elements.resultsTable) {
+      const tbody = this.elements.resultsTable.querySelector('tbody');
+      if (tbody) {
+        tbody.innerHTML = '';
+      }
+    }
+
+    // Remove completion info
+    const completionInfo = document.getElementById('completion-info');
+    if (completionInfo) {
+      completionInfo.remove();
+    }
+
+    // Reset process button
+    if (this.elements.processBtn) {
+      const btn = this.elements.processBtn as HTMLButtonElement;
+      btn.textContent = 'Process Warranties';
+      btn.disabled = true;
+      btn.style.background = '';
+      btn.style.color = '';
+    }
+
+    // Hide export and clear buttons
+    if (this.elements.exportBtn) {
+      (this.elements.exportBtn as HTMLButtonElement).disabled = true;
+    }
+
+    if (this.elements.clearSessionBtn) {
+      (this.elements.clearSessionBtn as HTMLElement).style.display = 'none';
+    }
+
+    // Reset file input
+    if (this.elements.fileInput) {
+      (this.elements.fileInput as HTMLInputElement).value = '';
+    }
+
+    // Clear file info
+    if (this.elements.fileInfo) {
+      this.elements.fileInfo.textContent = 'No file selected';
+    }
+
+    console.log('Results display cleared - ready for new upload');
   }
 }
 

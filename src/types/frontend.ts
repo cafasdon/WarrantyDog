@@ -147,6 +147,7 @@ export interface UIElements {
   resultsContainer: HTMLElement;
   resultsTable: HTMLTableElement;
   exportBtn: HTMLButtonElement;
+  clearSessionBtn: HTMLButtonElement;
   configBtn: HTMLButtonElement;
   configModal: HTMLElement;
   saveConfigBtn: HTMLButtonElement;
@@ -265,6 +266,7 @@ export interface ISessionService {
   createSession(data: DeviceData[], options?: DuplicateHandlingOptions): Promise<{ sessionId: string; message: string }>;
   updateSessionProgress(sessionId: string, progress: Partial<ProcessingProgress>): Promise<void>;
   getSession(sessionId: string): Promise<SessionData | null>;
+  clearCurrentSession(): void;
 }
 
 export interface StandardizationService {
