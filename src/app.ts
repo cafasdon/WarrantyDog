@@ -44,7 +44,8 @@ import type {
   EventHandler,
   ProgressCallback,
   ErrorCallback,
-  SuccessCallback
+  SuccessCallback,
+  DeviceStats
 } from './types/frontend';
 
 /**
@@ -500,12 +501,7 @@ class WarrantyChecker {
     return normalized as VendorType;
   }
 
-  /**
-   * Check if vendor is supported
-   */
-  private isVendorSupported(vendor: VendorType): boolean {
-    return ['dell', 'lenovo', 'hp'].includes(vendor);
-  }
+
 
   /**
    * Check if API is configured for vendor
@@ -614,10 +610,14 @@ class WarrantyChecker {
       // Display all devices in the table
       this.displayDevicesInTable(devices);
 
+      // Update processing controls and summary
+      this.updateProcessingControls(devices);
+
     } catch (error) {
       console.warn('Duplicate checking failed:', error);
       // Continue with normal display
       this.displayDevicesInTable(devices);
+      this.updateProcessingControls(devices);
     }
   }
 
@@ -745,6 +745,146 @@ class WarrantyChecker {
       console.log('Loading cached warranty data for', devices.length, 'devices');
     } catch (error) {
       console.warn('Failed to load cached warranty data:', error);
+    }
+  }
+
+  /**
+   * Update processing controls and summary based on detected devices
+   */
+  private updateProcessingControls(devices: DeviceData[]): void {
+    // Determine device support and configuration status
+    const deviceStats = this.analyzeDevices(devices);
+
+    // Update process button
+    this.updateProcessButton(deviceStats);
+
+    // Show device summary
+    this.showDeviceSummary(deviceStats);
+  }
+
+  /**
+   * Analyze devices to determine support and configuration status
+   */
+  private analyzeDevices(devices: DeviceData[]): DeviceStats {
+    const stats: DeviceStats = {
+      total: devices.length,
+      supported: 0,
+      unsupported: 0,
+      readyForProcessing: 0,
+      needsApiConfig: 0,
+      alreadyProcessed: 0
+    };
+
+    devices.forEach(device => {
+      const isSupported = this.isVendorSupported(device.vendor);
+      const hasApiConfig = this.hasApiConfiguration(device.vendor);
+      const isAlreadyProcessed = this.isDeviceAlreadyProcessed(device);
+
+      if (!isSupported) {
+        stats.unsupported++;
+      } else {
+        stats.supported++;
+
+        if (isAlreadyProcessed) {
+          stats.alreadyProcessed++;
+        } else if (hasApiConfig) {
+          stats.readyForProcessing++;
+        } else {
+          stats.needsApiConfig++;
+        }
+      }
+    });
+
+    return stats;
+  }
+
+  /**
+   * Check if vendor is supported
+   */
+  private isVendorSupported(vendor: string): boolean {
+    const supportedVendors = ['dell', 'lenovo', 'hp'];
+    return supportedVendors.includes(vendor.toLowerCase());
+  }
+
+  /**
+   * Check if API is configured for vendor
+   */
+  private hasApiConfiguration(vendor: string): boolean {
+    const vendorLower = vendor.toLowerCase();
+
+    switch (vendorLower) {
+      case 'dell':
+        return !!(this.apiConfig.dell?.apiKey && this.apiConfig.dell?.apiSecret);
+      case 'lenovo':
+        return !!(this.apiConfig.lenovo?.clientId);
+      case 'hp':
+        return !!(this.apiConfig.hp?.apiKey);
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Check if device already has warranty data
+   */
+  private isDeviceAlreadyProcessed(device: DeviceData): boolean {
+    return !!(device.warrantyStatus &&
+             device.warrantyStatus !== 'not_supported' &&
+             device.processingState === 'success');
+  }
+
+  /**
+   * Update process button based on device stats
+   */
+  private updateProcessButton(stats: DeviceStats): void {
+    if (!this.elements.processBtn) return;
+
+    const btn = this.elements.processBtn as HTMLButtonElement;
+
+    if (stats.readyForProcessing === 0) {
+      btn.textContent = 'No Devices Ready for Processing';
+      btn.disabled = true;
+    } else {
+      const skipCount = stats.needsApiConfig + stats.unsupported;
+      const buttonText = skipCount > 0 ?
+        `Process ${stats.readyForProcessing} Device${stats.readyForProcessing !== 1 ? 's' : ''} (Skip ${skipCount})` :
+        `Process ${stats.readyForProcessing} Device${stats.readyForProcessing !== 1 ? 's' : ''}`;
+      btn.textContent = buttonText;
+      btn.disabled = false;
+    }
+  }
+
+  /**
+   * Show device summary information
+   */
+  private showDeviceSummary(stats: DeviceStats): void {
+    let statusMessage = `📊 Device Summary: ${stats.total} total devices detected\n`;
+    statusMessage += `✅ Ready for processing: ${stats.readyForProcessing}\n`;
+
+    if (stats.alreadyProcessed > 0) {
+      statusMessage += `💾 Already processed: ${stats.alreadyProcessed}\n`;
+    }
+
+    if (stats.needsApiConfig > 0) {
+      statusMessage += `⚙️ Need API configuration: ${stats.needsApiConfig}\n`;
+    }
+
+    if (stats.unsupported > 0) {
+      statusMessage += `❌ Unsupported vendors: ${stats.unsupported}\n`;
+    }
+
+    statusMessage += `\n💡 Tip: Configure API keys to process more devices!`;
+
+    this.showPersistentMessage(statusMessage, 'info');
+  }
+
+  /**
+   * Show persistent message that stays visible
+   */
+  private showPersistentMessage(message: string, type: 'info' | 'success' | 'error'): void {
+    if (this.elements.statusText) {
+      this.elements.statusText.textContent = message;
+      this.elements.statusText.className = `status-message ${type}`;
     }
   }
 

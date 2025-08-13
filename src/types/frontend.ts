@@ -62,6 +62,15 @@ export interface DuplicateHandlingOptions {
   compareFields?: string[];
 }
 
+export interface DeviceStats {
+  total: number;
+  supported: number;
+  unsupported: number;
+  readyForProcessing: number;
+  needsApiConfig: number;
+  alreadyProcessed: number;
+}
+
 export interface ApiKeyConfig {
   dell?: {
     apiKey: string;
