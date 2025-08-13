@@ -36,4 +36,4 @@ USER warrantydog
 EXPOSE 3001
 
 # Start application from compiled output
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/src/server.js"]
