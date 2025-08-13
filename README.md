@@ -288,26 +288,54 @@ WarrantyDog/
 │   ├── index.html              # Main application interface
 │   ├── app.js                  # Core WarrantyChecker logic
 │   ├── vendorApis.js           # API client implementations
+│   ├── sessionService.js       # Browser-side session management
+│   ├── standardizationService.js # Data standardization service
 │   ├── style.css               # Responsive UI styling
 │   └── lib/papaparse.min.js    # CSV parsing library
 │
 ├── 🖥️ Backend
 │   ├── server.js               # Express API proxy server
+│   ├── logger.js               # Winston logging configuration
+│   ├── metrics.js              # Operational metrics collection
 │   ├── database/               # SQLite database services
-│   │   └── DatabaseService.js  # Session & cache management
-│   └── data/                   # SQLite database files
+│   │   ├── DatabaseService.js  # Session & cache management
+│   │   ├── schema.sql          # Database schema definition
+│   │   └── migrations.js       # Database migrations
+│   └── data/                   # SQLite database files (runtime)
 │
-├── 🐳 Docker
-│   └── Dockerfile              # Self-contained container definition
+├── 🧠 Intelligent Processing
+│   ├── intelligentRateLimitingSystem.js # Master rate limiting system
+│   ├── adaptiveRateLimiter.js  # Adaptive rate limiting
+│   ├── burstManager.js         # Burst handling
+│   ├── concurrentProcessor.js  # Concurrent processing
+│   ├── enhancedErrorRecovery.js # Error recovery system
+│   ├── rateLimitAnalytics.js   # Rate limit analytics
+│   └── intelligentDelayCalculator.js # Delay calculation
 │
-├── 🛠️ Development
+├── 🐳 Docker & Deployment
+│   ├── Dockerfile              # Container definition
+│   ├── docker-compose.yml      # Multi-container setup
+│   ├── install.sh              # Linux/macOS installer
+│   ├── install.ps1             # Windows PowerShell installer
+│   ├── start-warrantydog.sh    # Linux/macOS startup script
+│   └── start-warrantydog.bat   # Windows startup script
+│
+├── 🛠️ Development & Utilities
 │   ├── package.json            # Dependencies & scripts
+│   ├── package-lock.json       # Dependency lock file
+│   ├── check-db.js             # Database inspection utility
+│   ├── debug-db.js             # Database debugging utility
 │   └── examples/               # Sample CSV files
+│       └── sample-devices.csv  # Mixed vendor test data
 │
-└── 📚 Documentation
-    ├── README.md               # This file
-    ├── examples/               # Sample CSV files
-    └── docs/                   # Additional documentation
+├── 📚 Documentation & Legal
+│   ├── README.md               # This comprehensive guide
+│   ├── LICENSE                 # Apache 2.0 license
+│   └── NOTICE                  # Legal notices
+│
+└── 📊 Runtime Directories
+    ├── logs/                   # Application logs (created at runtime)
+    └── node_modules/           # NPM dependencies (created during install)
 ```
 
 ### 🔄 **Data Flow**
