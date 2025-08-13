@@ -64,7 +64,7 @@ const logFormat = winston.format.combine(
     };
 
     if (stack) {
-      logEntry.stack = stack;
+      logEntry['stack'] = stack;
     }
 
     return JSON.stringify(logEntry);
@@ -93,13 +93,13 @@ const transports: winston.transport[] = [];
 // Always add console transport
 transports.push(
   new winston.transports.Console({
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-    format: process.env.NODE_ENV === 'production' ? logFormat : consoleFormat
+    level: process.env['NODE_ENV'] === 'production' ? 'info' : 'debug',
+    format: process.env['NODE_ENV'] === 'production' ? logFormat : consoleFormat
   })
 );
 
 // Add file transports for production or when LOG_TO_FILE is set
-if (process.env.NODE_ENV === 'production' || process.env.LOG_TO_FILE === 'true') {
+if (process.env['NODE_ENV'] === 'production' || process.env['LOG_TO_FILE'] === 'true') {
   // Combined log file
   transports.push(
     new winston.transports.File({
@@ -128,7 +128,7 @@ if (process.env.NODE_ENV === 'production' || process.env.LOG_TO_FILE === 'true')
 // Create the logger
 const logger = winston.createLogger({
   levels: logLevels,
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+  level: process.env['LOG_LEVEL'] || (process.env['NODE_ENV'] === 'production' ? 'info' : 'debug'),
   format: logFormat,
   transports,
   exitOnError: false
@@ -209,7 +209,7 @@ extendedLogger.securityEvent = (event: string, ip: string, userAgent?: string, d
 };
 
 // Handle uncaught exceptions and unhandled rejections
-if (process.env.NODE_ENV === 'production') {
+if (process.env['NODE_ENV'] === 'production') {
   logger.exceptions.handle(
     new winston.transports.File({
       filename: path.join(logsDir, 'exceptions.log'),

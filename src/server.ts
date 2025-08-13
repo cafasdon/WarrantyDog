@@ -41,7 +41,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env['PORT'] || 3001;
 
 // Initialize database service
 const dbService = new DatabaseService();
@@ -254,11 +254,11 @@ app.post('/api/lenovo/warranty', async (req: Request, res: Response) => {
     console.log(`📊 Lenovo API response data:`, responseData);
 
     // Return the response with proper status
-    res.status(response.status).json(responseData);
+    return res.status(response.status).json(responseData);
 
   } catch (error) {
     console.error('Lenovo API proxy error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Internal server error',
       message: (error as Error).message
     } as ApiErrorResponse);
@@ -268,13 +268,17 @@ app.post('/api/lenovo/warranty', async (req: Request, res: Response) => {
 // Get cached warranty data endpoint
 app.get('/api/warranty-cache/:vendor/:serviceTag', (req: Request, res: Response) => {
   try {
-    const { vendor, serviceTag } = req.params;
-    const maxAgeHours = parseInt(req.query.maxAge as string) || 24;
+    const vendor = req.params['vendor'];
+    const serviceTag = req.params['serviceTag'];
+    const maxAgeHours = parseInt(req.query['maxAge'] as string) || 24;
 
     if (!dbInitialized) {
       return res.status(503).json({ error: 'Database not initialized' });
     }
 
+    if (!vendor || !serviceTag) {
+      return res.status(400).json({ error: 'Vendor and service tag are required' });
+    }
     const cachedResponse = dbService.getCachedApiResponse(vendor, serviceTag, maxAgeHours);
 
     if (cachedResponse && cachedResponse.parsing_status === 'success' && cachedResponse.parsed_data) {
@@ -285,7 +289,7 @@ app.get('/api/warranty-cache/:vendor/:serviceTag', (req: Request, res: Response)
         cacheAge: Math.round((Date.now() - new Date(cachedResponse.response_timestamp).getTime()) / 1000 / 60) // minutes
       });
     } else {
-      res.status(200).json({
+      return res.status(200).json({
         found: false,
         reason: cachedResponse ?
           (cachedResponse.parsing_status === 'failed' ? 'parsing_failed' : 'no_parsed_data') :
@@ -294,7 +298,7 @@ app.get('/api/warranty-cache/:vendor/:serviceTag', (req: Request, res: Response)
     }
   } catch (error) {
     console.error('Error getting cached warranty data:', error);
-    res.status(500).json({ error: 'Failed to get cached warranty data' });
+    return res.status(500).json({ error: 'Failed to get cached warranty data' });
   }
 });
 
@@ -357,7 +361,7 @@ app.get('/api/health', (req: Request, res: Response) => {
     message: 'WarrantyDog API proxy server is running',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env['NODE_ENV'] || 'development',
     version: '1.0.0',
     services: {
       api: 'operational',
@@ -418,7 +422,11 @@ app.get('/api/sessions', (req: Request, res: Response) => {
 // Get specific session with devices
 app.get('/api/sessions/:sessionId', (req: Request, res: Response) => {
   try {
-    const sessionData = dbService.getSessionSummary(req.params.sessionId);
+    const sessionId = req.params['sessionId'];
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    const sessionData = dbService.getSessionSummary(sessionId);
     if (!sessionData) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -481,7 +489,11 @@ app.post('/api/sessions', (req: Request<{}, SessionResponse, SessionCreateReques
 // Get session devices
 app.get('/api/sessions/:sessionId/devices', (req: Request, res: Response) => {
   try {
-    const devices = dbService.getSessionDevices(req.params.sessionId);
+    const sessionId = req.params['sessionId'];
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    const devices = dbService.getSessionDevices(sessionId);
     res.json(devices);
   } catch (error) {
     console.error('Error fetching session devices:', error);
@@ -494,7 +506,11 @@ app.put('/api/sessions/:sessionId/progress', (req: Request, res: Response) => {
   try {
     const { processed, successful, failed, skipped } = req.body;
 
-    dbService.updateSessionProgress(req.params.sessionId, {
+    const sessionId = req.params['sessionId'];
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    dbService.updateSessionProgress(sessionId, {
       processed, successful, failed, skipped
     });
 
@@ -510,7 +526,11 @@ app.put('/api/sessions/:sessionId/complete', (req: Request, res: Response) => {
   try {
     const { status = 'completed' } = req.body;
 
-    dbService.completeSession(req.params.sessionId, status);
+    const sessionId = req.params['sessionId'];
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID is required' });
+    }
+    dbService.completeSession(sessionId, status);
 
     res.json({ message: 'Session completed' });
   } catch (error) {
@@ -533,7 +553,12 @@ app.get('/api/database/stats', (req: Request, res: Response) => {
 // Device management endpoints
 app.get('/api/sessions/:sessionId/devices/:serialNumber', (req: Request, res: Response) => {
   try {
-    const { sessionId, serialNumber } = req.params;
+    const sessionId = req.params['sessionId'];
+    const serialNumber = req.params['serialNumber'];
+
+    if (!sessionId || !serialNumber) {
+      return res.status(400).json({ error: 'Session ID and serial number are required' });
+    }
     const device = dbService.findDeviceBySerial(sessionId, serialNumber);
 
     if (!device) {
@@ -616,7 +641,7 @@ async function startServer(): Promise<void> {
     app.listen(PORT, () => {
       logger.info(`🐕 WarrantyDog API proxy server running on port ${PORT}`, {
         port: PORT,
-        environment: process.env.NODE_ENV || 'development',
+        environment: process.env['NODE_ENV'] || 'development',
         nodeVersion: process.version
       });
       logger.info(`📡 Dell API proxy available at: http://localhost:${PORT}/api/dell/warranty/:serviceTag`);

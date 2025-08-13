@@ -13,14 +13,14 @@ export interface DeviceData {
   model?: string;
   deviceName?: string;
   location?: string;
-  originalData?: Record<string, any>;
+  originalData?: Record<string, unknown>;
   isSupported?: boolean;
   apiConfigured?: boolean;
   processingState?: ProcessingState;
   warrantyStatus?: WarrantyStatus;
   warrantyStartDate?: string;
   warrantyEndDate?: string;
-  warrantyDetails?: Record<string, any>;
+  warrantyDetails?: Record<string, unknown>;
   errorMessage?: string | undefined;
   lastProcessed?: string;
 }
@@ -84,7 +84,7 @@ export interface WarrantyApiResponse {
   warrantyStatus: WarrantyStatus;
   warrantyStartDate?: string;
   warrantyEndDate?: string;
-  warrantyDetails?: Record<string, any>;
+  warrantyDetails?: Record<string, unknown>;
   errorMessage?: string;
   rateLimited?: boolean;
   retryAfter?: number;
@@ -163,7 +163,7 @@ export interface UIElements {
 export interface TestResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
   error?: Error;
 }
 
@@ -199,9 +199,16 @@ export interface CacheEntry {
 // Window interface extensions for global objects
 declare global {
   interface Window {
-    warrantyChecker: any;
-    sessionService: any;
-    Papa: any; // PapaParse library
+    warrantyChecker: WarrantyLookupService;
+    sessionService: ISessionService;
+    Papa: {
+      parse: (input: string, config?: {
+        header?: boolean;
+        skipEmptyLines?: boolean;
+        complete?: (results: { data: unknown[]; errors: unknown[] }) => void;
+        error?: (error: Error) => void;
+      }) => { data: unknown[]; errors: unknown[] };
+    };
   }
 }
 
@@ -209,7 +216,7 @@ declare global {
 export type EventHandler<T = Event> = (event: T) => void | Promise<void>;
 export type ProgressCallback = (progress: ProcessingProgress) => void;
 export type ErrorCallback = (error: Error, context?: string) => void;
-export type SuccessCallback = (message: string, data?: any) => void;
+export type SuccessCallback = (message: string, data?: unknown) => void;
 
 // Utility types
 export type Partial<T> = {
@@ -248,7 +255,6 @@ export interface WarrantyChecker {
 }
 
 export interface WarrantyLookupService {
-  apis: Record<VendorType, any>;
   lookupWarranty(vendor: VendorType, serialNumber: string): Promise<WarrantyApiResponse>;
   testConnection(vendor: VendorType): Promise<TestResult>;
 }
@@ -256,13 +262,13 @@ export interface WarrantyLookupService {
 export interface ISessionService {
   currentSessionId: string | null;
   generateSessionId(): string;
-  createSession(data: any, options?: DuplicateHandlingOptions): Promise<any>;
+  createSession(data: DeviceData[], options?: DuplicateHandlingOptions): Promise<{ sessionId: string; message: string }>;
   updateSessionProgress(sessionId: string, progress: Partial<ProcessingProgress>): Promise<void>;
   getSession(sessionId: string): Promise<SessionData | null>;
 }
 
 export interface StandardizationService {
-  standardizeRawApiResponse(vendor: VendorType, rawResponse: any): StandardizedWarrantyData;
-  standardizeUniversalFields(data: any): StandardizedWarrantyData;
+  standardizeRawApiResponse(vendor: VendorType, rawResponse: Record<string, unknown>): StandardizedWarrantyData;
+  standardizeUniversalFields(data: Record<string, unknown>): StandardizedWarrantyData;
   validateStandardizedData(data: StandardizedWarrantyData): ValidationResult;
 }

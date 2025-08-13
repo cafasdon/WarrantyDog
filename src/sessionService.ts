@@ -23,7 +23,8 @@ import type {
   DeviceData,
   SessionData,
   ProcessingProgress,
-  DuplicateHandlingOptions
+  DuplicateHandlingOptions,
+  ISessionService
 } from './types/frontend';
 
 interface SessionCreateRequest {
@@ -103,9 +104,27 @@ class SessionService {
   }
 
   /**
-   * Create a new session
+   * Create a new session (interface implementation)
    */
-  async createSession(sessionData: SessionCreateRequest, duplicateOptions: DuplicateHandlingOptions = {}): Promise<SessionResponse> {
+  async createSession(data: DeviceData[], options: DuplicateHandlingOptions = {}): Promise<{ sessionId: string; message: string }> {
+    const sessionId = this.generateSessionId();
+    const sessionData: SessionCreateRequest = {
+      sessionId,
+      fileName: 'CSV Upload',
+      devices: data
+    };
+
+    const response = await this.createSessionInternal(sessionData, options);
+    return {
+      sessionId: response.sessionId,
+      message: response.message
+    };
+  }
+
+  /**
+   * Create a new session (internal implementation)
+   */
+  async createSessionInternal(sessionData: SessionCreateRequest, duplicateOptions: DuplicateHandlingOptions = {}): Promise<SessionResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/api/sessions`, {
         method: 'POST',
@@ -259,11 +278,7 @@ class SessionService {
         // Create new session in database
         if (sessionData.csvData && sessionData.csvData.length > 0) {
           const newSessionId = this.generateSessionId();
-          await this.createSession({
-            sessionId: newSessionId,
-            fileName: sessionData.fileName || 'Migrated Session',
-            devices: sessionData.csvData
-          });
+          await this.createSession(sessionData.csvData);
           
           this.setCurrentSession(newSessionId);
           console.log('Session migrated successfully');
@@ -501,7 +516,7 @@ const sessionService = new SessionService();
 // Attach to window for global access
 declare global {
   interface Window {
-    sessionService: any;
+    sessionService: ISessionService;
   }
 }
 

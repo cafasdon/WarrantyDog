@@ -42,7 +42,7 @@ export interface ApiErrorResponse {
   requestId?: string;
 }
 
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
   success: boolean;
   data: T;
   timestamp?: string;
@@ -78,7 +78,7 @@ export interface SessionCreateRequest {
     model?: string;
     deviceName?: string;
     location?: string;
-    originalData?: Record<string, any>;
+    originalData?: Record<string, unknown>;
   }>;
   options?: {
     strategy?: 'skip' | 'update' | 'replace';
@@ -109,7 +109,7 @@ export interface DeviceUpdateRequest {
     warrantyStatus: 'active' | 'expired' | 'unknown';
     warrantyStartDate?: string;
     warrantyEndDate?: string;
-    warrantyDetails?: Record<string, any>;
+    warrantyDetails?: Record<string, unknown>;
     processingState: 'pending' | 'processing' | 'success' | 'error' | 'rate_limited';
     errorMessage?: string;
   };
@@ -206,16 +206,43 @@ export interface HPWarrantyApiResponse {
   supportLevel?: string;
 }
 
+// Raw API response types (before standardization)
+export interface RawApiResponse {
+  [key: string]: unknown;
+}
+
+export interface DellRawApiResponse extends RawApiResponse {
+  entitlements?: Array<{
+    serviceLevelDescription?: string;
+    startDate?: string;
+    endDate?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
+export interface LenovoRawApiResponse extends RawApiResponse {
+  ErrorCode?: number;
+  ErrorMessage?: string;
+  Warranty?: Array<{
+    Start?: string;
+    End?: string;
+    Type?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 // Error Types
 export interface ApiError extends Error {
   statusCode: number;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
 
 export interface ValidationError extends ApiError {
   field: string;
-  value: any;
+  value: unknown;
   constraint: string;
 }
 
@@ -226,6 +253,6 @@ export interface RateLimitError extends ApiError {
 }
 
 // Utility Types
-export type ApiHandler<T = any> = (req: Request, res: Response) => Promise<T> | T;
+export type ApiHandler<T = unknown> = (req: Request, res: Response) => Promise<T> | T;
 export type ErrorHandler = (error: Error, req: Request, res: Response, next: Function) => void;
 export type Middleware = (req: Request, res: Response, next: Function) => void;

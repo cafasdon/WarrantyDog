@@ -77,12 +77,21 @@ class WarrantyChecker {
 
   constructor() {
     this.warrantyService = new WarrantyLookupService();
-    
+
     this.initializeElements();
     this.initializeProcessingState();
     this.bindEvents();
     this.loadApiKeys();
     this.initializeSessionService();
+  }
+
+  // Implement WarrantyLookupService interface methods
+  async lookupWarranty(vendor: VendorType, serialNumber: string): Promise<WarrantyApiResponse> {
+    return this.warrantyService.lookupWarranty(vendor, serialNumber);
+  }
+
+  async testConnection(vendor: VendorType): Promise<TestResult> {
+    return this.warrantyService.testConnection(vendor);
   }
 
   /**
@@ -366,7 +375,7 @@ class WarrantyChecker {
       const parseResult = window.Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
-        transformHeader: (header: string) => header.trim()
+        // transformHeader: (header: string) => header.trim() // Removed - not supported in our Papa type
       });
 
       if (parseResult.errors.length > 0) {
@@ -901,11 +910,8 @@ class WarrantyChecker {
 
       if (!this.sessionId) {
         this.sessionId = this.generateSessionId();
-        await window.sessionService.createSession({
-          sessionId: this.sessionId,
-          fileName: this.elements.fileInfo?.textContent || 'Unknown',
-          devices: devices
-        }, this.duplicateHandlingOptions);
+        const result = await window.sessionService.createSession(devices, this.duplicateHandlingOptions);
+        this.sessionId = result.sessionId;
       }
 
       await window.sessionService.updateSessionProgress(this.sessionId, {

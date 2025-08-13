@@ -34,6 +34,11 @@ import type {
   StandardizedWarrantyData,
   ValidationResult
 } from './types/frontend';
+import type {
+  RawApiResponse,
+  DellRawApiResponse,
+  LenovoRawApiResponse
+} from './types/api';
 
 interface FieldMapping {
   [oldField: string]: string;
@@ -183,7 +188,7 @@ class StandardizationService {
   /**
    * Layer 1: Standardize raw API response fields (vendor-specific)
    */
-  standardizeRawApiResponse(vendor: VendorType, rawResponse: any): any {
+  standardizeRawApiResponse(vendor: VendorType, rawResponse: RawApiResponse): RawApiResponse {
     const vendorLower = vendor.toLowerCase() as VendorType;
     const mapping = this.vendorFieldMappings[vendorLower];
     
@@ -218,12 +223,12 @@ class StandardizationService {
   /**
    * Standardize Dell API response structure
    */
-  private standardizeDellResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeDellResponse(rawResponse: DellRawApiResponse, mapping: VendorMapping): RawApiResponse {
     const standardized = this.mapFields(rawResponse, mapping.main);
     
     // Handle entitlements array
     if (rawResponse.entitlements && Array.isArray(rawResponse.entitlements)) {
-      standardized.warranties = rawResponse.entitlements.map((entitlement: any) =>
+      standardized['warranties'] = rawResponse.entitlements.map((entitlement) =>
         this.mapFields(entitlement, mapping.warranty || {})
       );
     }
@@ -234,12 +239,12 @@ class StandardizationService {
   /**
    * Standardize Lenovo API response structure
    */
-  private standardizeLenovoResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeLenovoResponse(rawResponse: LenovoRawApiResponse, mapping: VendorMapping): RawApiResponse {
     const standardized = this.mapFields(rawResponse, mapping.main);
     
     // Handle error responses
     if (rawResponse.ErrorCode !== undefined) {
-      standardized.error = this.mapFields({
+      standardized['error'] = this.mapFields({
         ErrorCode: rawResponse.ErrorCode,
         ErrorMessage: rawResponse.ErrorMessage
       }, mapping.error || {});
@@ -247,7 +252,7 @@ class StandardizationService {
 
     // Standardize warranty array
     if (rawResponse.Warranty && Array.isArray(rawResponse.Warranty)) {
-      standardized.warranties = rawResponse.Warranty.map((warranty: any) =>
+      standardized['warranties'] = rawResponse.Warranty.map((warranty) =>
         this.mapFields(warranty, mapping.warranty || {})
       );
     }
@@ -258,35 +263,35 @@ class StandardizationService {
   /**
    * Standardize HP API response structure
    */
-  private standardizeHpResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeHpResponse(rawResponse: RawApiResponse, mapping: VendorMapping): RawApiResponse {
     return this.mapFields(rawResponse, mapping.main);
   }
 
   /**
    * Standardize Microsoft API response structure
    */
-  private standardizeMicrosoftResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeMicrosoftResponse(rawResponse: RawApiResponse, mapping: VendorMapping): RawApiResponse {
     return this.mapFields(rawResponse, mapping.main);
   }
 
   /**
    * Standardize ASUS API response structure
    */
-  private standardizeAsusResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeAsusResponse(rawResponse: RawApiResponse, mapping: VendorMapping): RawApiResponse {
     return this.mapFields(rawResponse, mapping.main);
   }
 
   /**
    * Generic response standardization for unknown vendors
    */
-  private standardizeGenericResponse(rawResponse: any, mapping: VendorMapping): any {
+  private standardizeGenericResponse(rawResponse: RawApiResponse, mapping: VendorMapping): RawApiResponse {
     return this.mapFields(rawResponse, mapping.main || {});
   }
 
   /**
    * Map fields from source object using field mapping
    */
-  private mapFields(source: any, fieldMapping: FieldMapping): any {
+  private mapFields(source: RawApiResponse, fieldMapping: FieldMapping): RawApiResponse {
     if (!source || !fieldMapping) return source;
     
     const mapped = { ...source };
@@ -306,23 +311,23 @@ class StandardizationService {
   /**
    * Layer 2: Universal field standardization (vendor-agnostic)
    */
-  standardizeUniversalFields(data: any): StandardizedWarrantyData {
+  standardizeUniversalFields(data: RawApiResponse): StandardizedWarrantyData {
     if (!data || typeof data !== 'object') {
       return this.createEmptyStandardizedData();
     }
 
     const standardized: StandardizedWarrantyData = {
-      serialNumber: data.serialNumber || data.serviceTag || '',
-      vendor: data.vendor || 'unknown' as VendorType,
+      serialNumber: String(data['serialNumber'] || data['serviceTag'] || ''),
+      vendor: (data['vendor'] || 'unknown') as VendorType,
       warrantyStatus: 'unknown'
     };
 
     // Standardize optional fields
-    if (data.model) standardized.model = String(data.model);
-    if (data.startDate) standardized.startDate = this.standardizeDate(data.startDate);
-    if (data.endDate) standardized.endDate = this.standardizeDate(data.endDate);
-    if (data.serviceLevel) standardized.serviceLevel = String(data.serviceLevel);
-    if (data.description) standardized.description = String(data.description);
+    if (data['model']) standardized.model = String(data['model']);
+    if (data['startDate']) standardized.startDate = this.standardizeDate(data['startDate']);
+    if (data['endDate']) standardized.endDate = this.standardizeDate(data['endDate']);
+    if (data['serviceLevel']) standardized.serviceLevel = String(data['serviceLevel']);
+    if (data['description']) standardized.description = String(data['description']);
 
     // Determine warranty status
     standardized.warrantyStatus = this.determineWarrantyStatus(data);
@@ -334,10 +339,11 @@ class StandardizationService {
     }
 
     // Handle errors
-    if (data.error) {
+    if (data['error']) {
+      const errorObj = data['error'] as { code?: string; message?: string };
       standardized.error = {
-        code: data.error.code,
-        message: data.error.message || 'Unknown error'
+        code: errorObj.code || 'UNKNOWN',
+        message: errorObj.message || 'Unknown error'
       };
     }
 
@@ -358,13 +364,13 @@ class StandardizationService {
   /**
    * Standardize date format
    */
-  private standardizeDate(dateValue: any): string {
+  private standardizeDate(dateValue: unknown): string {
     if (!dateValue) return '';
 
     try {
       // If it's already a Date object
       if (dateValue instanceof Date) {
-        return dateValue.toISOString().split('T')[0];
+        return dateValue.toISOString().split('T')[0] || '';
       }
 
       // If it's a string, try to parse it
@@ -374,7 +380,7 @@ class StandardizationService {
       // Try parsing as ISO date first
       const isoDate = new Date(dateStr);
       if (!isNaN(isoDate.getTime())) {
-        return isoDate.toISOString().split('T')[0];
+        return isoDate.toISOString().split('T')[0] || '';
       }
 
       // Try different date formats
@@ -382,7 +388,7 @@ class StandardizationService {
         if (pattern.test(dateStr)) {
           const parsedDate = this.parseSpecificDateFormat(dateStr, pattern);
           if (parsedDate) {
-            return parsedDate.toISOString().split('T')[0];
+            return parsedDate.toISOString().split('T')[0] || '';
           }
         }
       }
@@ -406,23 +412,23 @@ class StandardizationService {
       } else if (pattern.source.includes('\\d{2}\\/\\d{2}\\/\\d{4}')) {
         // MM/DD/YYYY
         const [month, day, year] = dateStr.split('/');
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return new Date(parseInt(year || '0'), parseInt(month || '0') - 1, parseInt(day || '0'));
       } else if (pattern.source.includes('\\d{2}-\\d{2}-\\d{4}')) {
         // MM-DD-YYYY
         const [month, day, year] = dateStr.split('-');
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return new Date(parseInt(year || '0'), parseInt(month || '0') - 1, parseInt(day || '0'));
       } else if (pattern.source.includes('\\d{4}\\/\\d{2}\\/\\d{2}')) {
         // YYYY/MM/DD
         const [year, month, day] = dateStr.split('/');
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return new Date(parseInt(year || '0'), parseInt(month || '0') - 1, parseInt(day || '0'));
       } else if (pattern.source.includes('\\d{2}\\.\\d{2}\\.\\d{4}')) {
         // DD.MM.YYYY
         const [day, month, year] = dateStr.split('.');
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return new Date(parseInt(year || '0'), parseInt(month || '0') - 1, parseInt(day || '0'));
       } else if (pattern.source.includes('\\d{4}\\.\\d{2}\\.\\d{2}')) {
         // YYYY.MM.DD
         const [year, month, day] = dateStr.split('.');
-        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        return new Date(parseInt(year || '0'), parseInt(month || '0') - 1, parseInt(day || '0'));
       }
       return null;
     } catch (error) {
@@ -433,7 +439,7 @@ class StandardizationService {
   /**
    * Standardize boolean values
    */
-  private standardizeBoolean(value: any): boolean {
+  private standardizeBoolean(value: unknown): boolean {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'number') return value !== 0;
 
@@ -449,18 +455,18 @@ class StandardizationService {
   /**
    * Determine warranty status from data
    */
-  private determineWarrantyStatus(data: any): 'active' | 'expired' | 'unknown' {
+  private determineWarrantyStatus(data: RawApiResponse): 'active' | 'expired' | 'unknown' {
     // Check explicit status field
-    if (data.warrantyStatus) {
-      const status = String(data.warrantyStatus).toLowerCase();
+    if (data['warrantyStatus']) {
+      const status = String(data['warrantyStatus']).toLowerCase();
       if (status.includes('active') || status.includes('valid')) return 'active';
       if (status.includes('expired') || status.includes('invalid')) return 'expired';
     }
 
     // Check end date
-    if (data.endDate) {
+    if (data['endDate']) {
       try {
-        const endDate = new Date(data.endDate);
+        const endDate = new Date(data['endDate'] as string);
         const now = new Date();
         return endDate > now ? 'active' : 'expired';
       } catch (error) {
@@ -469,12 +475,12 @@ class StandardizationService {
     }
 
     // Check boolean fields
-    if (data.isActive !== undefined) {
-      return this.standardizeBoolean(data.isActive) ? 'active' : 'expired';
+    if (data['isActive'] !== undefined) {
+      return this.standardizeBoolean(data['isActive']) ? 'active' : 'expired';
     }
 
-    if (data.inWarranty !== undefined) {
-      return this.standardizeBoolean(data.inWarranty) ? 'active' : 'expired';
+    if (data['inWarranty'] !== undefined) {
+      return this.standardizeBoolean(data['inWarranty']) ? 'active' : 'expired';
     }
 
     return 'unknown';
@@ -541,7 +547,7 @@ class StandardizationService {
   /**
    * Complete standardization process (both layers)
    */
-  standardizeWarrantyData(vendor: VendorType, rawResponse: any): StandardizedWarrantyData {
+  standardizeWarrantyData(vendor: VendorType, rawResponse: RawApiResponse): StandardizedWarrantyData {
     try {
       console.log(`🔄 Starting complete standardization for ${vendor}...`);
 
@@ -567,7 +573,7 @@ class StandardizationService {
 
       // Return minimal valid structure on error
       return {
-        serialNumber: rawResponse?.serialNumber || rawResponse?.serviceTag || '',
+        serialNumber: String(rawResponse?.['serialNumber'] || rawResponse?.['serviceTag'] || ''),
         vendor,
         warrantyStatus: 'unknown',
         error: {

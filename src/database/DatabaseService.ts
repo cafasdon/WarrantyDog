@@ -619,7 +619,7 @@ class DatabaseService {
       GROUP BY status
     `).all() as { status: string; count: number }[];
 
-    stats.sessions = sessionStats.reduce((acc, row) => {
+    stats['sessions'] = sessionStats.reduce((acc, row) => {
       acc[row.status] = row.count;
       return acc;
     }, {} as Record<string, number>);
@@ -631,7 +631,7 @@ class DatabaseService {
       GROUP BY processing_state
     `).all() as { processing_state: string; count: number }[];
 
-    stats.devices = deviceStats.reduce((acc, row) => {
+    stats['devices'] = deviceStats.reduce((acc, row) => {
       acc[row.processing_state] = row.count;
       return acc;
     }, {} as Record<string, number>);
@@ -640,7 +640,7 @@ class DatabaseService {
     const totalAttemptsResult = this.db.prepare(`
       SELECT COUNT(*) as count FROM processing_history
     `).get() as { count: number } | undefined;
-    stats.totalAttempts = totalAttemptsResult?.count || 0;
+    stats['totalAttempts'] = totalAttemptsResult?.count || 0;
 
     return stats;
   }

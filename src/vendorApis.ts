@@ -477,7 +477,7 @@ class DellAPI extends BaseAPI {
   /**
    * Test Dell API connection
    */
-  async testConnection(): Promise<TestResult> {
+  override async testConnection(): Promise<TestResult> {
     try {
       const testSerial = 'TESTDELL123'; // Use a known test serial
       const result = await this.lookupWarranty(testSerial);
@@ -639,7 +639,7 @@ class LenovoAPI extends BaseAPI {
   /**
    * Test Lenovo API connection
    */
-  async testConnection(): Promise<TestResult> {
+  override async testConnection(): Promise<TestResult> {
     try {
       const testSerial = 'TESTLENOVO123';
       const result = await this.lookupWarranty(testSerial);
