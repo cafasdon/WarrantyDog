@@ -285,7 +285,7 @@ class WarrantyChecker {
   private async handleFileSelect(event: Event): Promise<void> {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
-    
+
     if (file) {
       await this.processFile(file);
     }
