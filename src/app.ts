@@ -21,8 +21,8 @@
  * Supports Dell API with plans for Lenovo and HP integration.
  */
 
-import { WarrantyLookupService } from './vendorApis.js?v=20250724-0200';
-import { standardizationService } from './standardizationService.js';
+import { WarrantyLookupService } from './vendorApis';
+import { standardizationService } from './standardizationService';
 import type {
   DeviceData,
   CsvRow,
@@ -45,7 +45,7 @@ import type {
   ProgressCallback,
   ErrorCallback,
   SuccessCallback
-} from './types/frontend.js';
+} from './types/frontend';
 
 /**
  * Main WarrantyChecker Application Class
@@ -316,7 +316,10 @@ class WarrantyChecker {
 
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      await this.processFile(files[0]);
+      const file = files[0];
+      if (file) {
+        await this.processFile(file);
+      }
     }
   }
 
@@ -446,9 +449,9 @@ class WarrantyChecker {
     return {
       serialNumber: serialNumber.trim().toUpperCase(),
       vendor: normalizedVendor,
-      model: this.findValueInRow(row, ['model', 'product', 'product_name']),
-      deviceName: this.findValueInRow(row, ['name', 'device_name', 'hostname', 'computer_name']),
-      location: this.findValueInRow(row, ['location', 'site', 'building', 'department']),
+      model: this.findValueInRow(row, ['model', 'product', 'product_name']) || undefined,
+      deviceName: this.findValueInRow(row, ['name', 'device_name', 'hostname', 'computer_name']) || undefined,
+      location: this.findValueInRow(row, ['location', 'site', 'building', 'department']) || undefined,
       originalData: row,
       isSupported,
       apiConfigured,
@@ -682,6 +685,13 @@ class WarrantyChecker {
   }
 
   /**
+   * Process devices (alias for startProcessing for interface compatibility)
+   */
+  public async processDevices(): Promise<void> {
+    return this.startProcessing();
+  }
+
+  /**
    * Start warranty processing
    */
   public async startProcessing(): Promise<void> {
@@ -764,6 +774,8 @@ class WarrantyChecker {
       }
 
       const device = processableDevices[i];
+      if (!device) continue;
+
       this.currentIndex = i;
 
       try {
@@ -826,7 +838,7 @@ class WarrantyChecker {
     const deviceIndex = this.csvData.findIndex(d => d.serialNumber === device.serialNumber);
     if (deviceIndex === -1) return;
 
-    const row = document.getElementById(`device-row-${deviceIndex}`);
+    const row = document.getElementById(`device-row-${deviceIndex}`) as HTMLTableRowElement;
     if (!row) return;
 
     // Update status cell
@@ -1229,169 +1241,7 @@ class WarrantyChecker {
     await this.startProcessing();
   }
 
-  /**
-   * Retry failed devices
-   */
-  private async retryFailedDevices(): Promise<void> {
-    const failedDevices = this.csvData.filter(device => device.processingState === 'error');
 
-    if (failedDevices.length === 0) {
-      this.showInfo('No failed devices to retry');
-      return;
-    }
-
-    // Reset failed devices to pending
-    failedDevices.forEach(device => {
-      device.processingState = 'pending';
-      device.errorMessage = undefined;
-      this.updateDeviceRowStatus(device);
-    });
-
-    this.showInfo(`🔄 Retrying ${failedDevices.length} failed devices...`);
-
-    // Hide retry button during processing
-    if (this.elements.retryFailedBtn) {
-      this.elements.retryFailedBtn.style.display = 'none';
-    }
-
-    await this.startProcessing();
-  }
-
-  /**
-   * Export results to CSV
-   */
-  public exportResults(): void {
-    try {
-      const csvContent = this.generateCsvContent();
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `warranty_results_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-
-      this.showSuccess('✅ Results exported successfully!');
-    } catch (error) {
-      this.showError(`❌ Export failed: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * Generate CSV content for export
-   */
-  private generateCsvContent(): string {
-    const headers = [
-      'Serial Number', 'Vendor', 'Model', 'Device Name', 'Location',
-      'Warranty Status', 'Warranty Start Date', 'Warranty End Date',
-      'Processing Status', 'Error Message'
-    ];
-
-    const rows = this.csvData.map(device => [
-      device.serialNumber,
-      device.vendor,
-      device.model || '',
-      device.deviceName || '',
-      device.location || '',
-      device.warrantyStatus || '',
-      device.warrantyStartDate || '',
-      device.warrantyEndDate || '',
-      device.processingState || '',
-      device.errorMessage || ''
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-
-    return csvContent;
-  }
-
-  /**
-   * Open configuration modal
-   */
-  private openConfigModal(): void {
-    if (this.elements.configModal) {
-      this.elements.configModal.style.display = 'block';
-    }
-  }
-
-  /**
-   * Close modal
-   */
-  private closeModal(modal: HTMLElement): void {
-    modal.style.display = 'none';
-  }
-
-  /**
-   * Save configuration
-   */
-  private async saveConfiguration(): Promise<void> {
-    try {
-      if (this.elements.saveConfigBtn) {
-        (this.elements.saveConfigBtn as HTMLButtonElement).disabled = true;
-        (this.elements.saveConfigBtn as HTMLButtonElement).textContent = 'Saving...';
-      }
-
-      // Save Dell API configuration
-      const dellApiKey = (this.elements.dellApiKeyInput as HTMLInputElement)?.value?.trim();
-      const dellApiSecret = (this.elements.dellApiSecretInput as HTMLInputElement)?.value?.trim();
-
-      if (dellApiKey && dellApiSecret) {
-        localStorage.setItem('dell_api_key', dellApiKey);
-        localStorage.setItem('dell_api_secret', dellApiSecret);
-        this.apiConfig.dell = { apiKey: dellApiKey, apiSecret: dellApiSecret };
-      }
-
-      // Save Lenovo API configuration
-      const lenovoClientId = (this.elements.lenovoClientIdInput as HTMLInputElement)?.value?.trim();
-
-      if (lenovoClientId) {
-        localStorage.setItem('lenovo_client_id', lenovoClientId);
-        this.apiConfig.lenovo = { clientId: lenovoClientId };
-      }
-
-      this.updateApiStatusIndicators();
-      this.showSuccess('✅ Configuration saved successfully!');
-
-      // Close modal
-      if (this.elements.configModal) {
-        this.closeModal(this.elements.configModal);
-      }
-
-    } catch (error) {
-      this.showError(`❌ Configuration Error: ${(error as Error).message}`);
-    } finally {
-      if (this.elements.saveConfigBtn) {
-        (this.elements.saveConfigBtn as HTMLButtonElement).disabled = false;
-        (this.elements.saveConfigBtn as HTMLButtonElement).textContent = 'Save';
-      }
-    }
-  }
-
-  /**
-   * Update API status indicators
-   */
-  private updateApiStatusIndicators(): void {
-    // Update Dell status
-    if (this.elements.dellStatusElement) {
-      const dellConfigured = this.isApiConfigured('dell');
-      this.elements.dellStatusElement.textContent = dellConfigured ? '✅ Configured' : '❌ Not Configured';
-      this.elements.dellStatusElement.className = dellConfigured ? 'status-success' : 'status-error';
-    }
-
-    // Update Lenovo status
-    if (this.elements.lenovoStatusElement) {
-      const lenovoConfigured = this.isApiConfigured('lenovo');
-      this.elements.lenovoStatusElement.textContent = lenovoConfigured ? '✅ Configured' : '❌ Not Configured';
-      this.elements.lenovoStatusElement.className = lenovoConfigured ? 'status-success' : 'status-error';
-    }
-  }
 
   /**
    * Test Dell API connection

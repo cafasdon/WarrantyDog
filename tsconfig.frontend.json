@@ -16,17 +16,17 @@
     "noEmit": false
   },
   "include": [
-    "app.ts",
-    "vendorApis.ts", 
-    "sessionService.ts",
-    "standardizationService.ts",
-    "*.ts"
+    "src/app.ts",
+    "src/vendorApis.ts",
+    "src/sessionService.ts",
+    "src/standardizationService.ts",
+    "src/types/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "server.ts",
-    "database/**/*",
+    "src/server.ts",
+    "src/database/**/*",
     "logs",
     "data",
     "examples",

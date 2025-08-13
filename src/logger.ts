@@ -135,7 +135,7 @@ const logger = winston.createLogger({
 });
 
 // Extend logger interface
-interface ExtendedLogger extends winston.Logger {
+interface ExtendedLogger extends Omit<winston.Logger, 'stream'> {
   stream: {
     write: (message: string) => void;
   };

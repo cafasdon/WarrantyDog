@@ -131,8 +131,8 @@ app.use(express.static('.'));
 app.get('/api/dell/warranty/:serviceTag', async (req: Request, res: Response) => {
   try {
     const { serviceTag } = req.params;
-    const apiKey = req.headers['x-dell-api-key'];
-    const apiSecret = req.headers['x-dell-api-secret'];
+    const apiKey = req.headers['x-dell-api-key'] as string;
+    const apiSecret = req.headers['x-dell-api-secret'] as string;
 
     if (!apiKey || !apiSecret) {
       return res.status(400).json({

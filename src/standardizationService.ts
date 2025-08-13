@@ -33,7 +33,7 @@ import type {
   VendorType,
   StandardizedWarrantyData,
   ValidationResult
-} from './types/frontend.js';
+} from './types/frontend';
 
 interface FieldMapping {
   [oldField: string]: string;
@@ -139,6 +139,9 @@ class StandardizationService {
           'warrantyStartDate': 'startDate',
           'warrantyEndDate': 'endDate'
         }
+      },
+      unknown: {
+        main: {}
       }
     };
   }

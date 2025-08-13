@@ -24,7 +24,7 @@ import type {
   SessionData,
   ProcessingProgress,
   DuplicateHandlingOptions
-} from './types/frontend.js';
+} from './types/frontend';
 
 interface SessionCreateRequest {
   sessionId: string;
@@ -501,7 +501,7 @@ const sessionService = new SessionService();
 // Attach to window for global access
 declare global {
   interface Window {
-    sessionService: SessionService;
+    sessionService: any;
   }
 }
 

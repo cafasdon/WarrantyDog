@@ -35,7 +35,7 @@ import type {
   TestResult,
   StandardizedWarrantyData,
   RateLimitInfo
-} from './types/frontend.js';
+} from './types/frontend';
 
 interface RateLimiter {
   vendor: VendorType;
@@ -97,6 +97,15 @@ const rateLimiters: Record<VendorType, RateLimiter> = {
   },
   asus: {
     vendor: 'asus',
+    requestsPerMinute: 30,
+    burstLimit: 10,
+    currentRequests: 0,
+    lastReset: Date.now(),
+    isBlocked: false,
+    blockUntil: 0
+  },
+  unknown: {
+    vendor: 'unknown',
     requestsPerMinute: 30,
     burstLimit: 10,
     currentRequests: 0,

@@ -3,7 +3,7 @@
  * Type safety for browser-based warranty checking application
  */
 
-export type VendorType = 'dell' | 'lenovo' | 'hp' | 'microsoft' | 'asus';
+export type VendorType = 'dell' | 'lenovo' | 'hp' | 'microsoft' | 'asus' | 'unknown';
 export type ProcessingState = 'pending' | 'processing' | 'success' | 'error' | 'skipped' | 'rate_limited';
 export type WarrantyStatus = 'active' | 'expired' | 'unknown' | 'not_supported';
 
@@ -21,7 +21,7 @@ export interface DeviceData {
   warrantyStartDate?: string;
   warrantyEndDate?: string;
   warrantyDetails?: Record<string, any>;
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   lastProcessed?: string;
 }
 
@@ -199,8 +199,8 @@ export interface CacheEntry {
 // Window interface extensions for global objects
 declare global {
   interface Window {
-    warrantyChecker: WarrantyChecker;
-    sessionService: SessionService;
+    warrantyChecker: any;
+    sessionService: any;
     Papa: any; // PapaParse library
   }
 }
@@ -253,10 +253,10 @@ export interface WarrantyLookupService {
   testConnection(vendor: VendorType): Promise<TestResult>;
 }
 
-export interface SessionService {
+export interface ISessionService {
   currentSessionId: string | null;
   generateSessionId(): string;
-  createSession(data: Partial<SessionData>, options?: DuplicateHandlingOptions): Promise<void>;
+  createSession(data: any, options?: DuplicateHandlingOptions): Promise<any>;
   updateSessionProgress(sessionId: string, progress: Partial<ProcessingProgress>): Promise<void>;
   getSession(sessionId: string): Promise<SessionData | null>;
 }
