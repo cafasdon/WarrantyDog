@@ -75,6 +75,18 @@ WarrantyDog is built with **TypeScript-first architecture** providing:
 
 ## 🚀 **Quick Start Guide**
 
+### ⚡ **Super Quick Docker Start**
+
+**Want to run WarrantyDog right now? Just copy and paste:**
+
+```bash
+git clone https://github.com/cafasdon/WarrantyDog.git
+cd WarrantyDog
+docker-compose up -d
+```
+
+**That's it!** Open http://localhost:3001 in your browser.
+
 > **🔒 Clean Database Startup**: WarrantyDog starts with a completely empty database. No pre-existing warranty data or session information is included. The application automatically creates and initializes the database schema on first startup.
 
 > **💾 Data Persistence**: All warranty data, API responses, and session information are stored in a persistent SQLite database using Docker volumes. Your data survives container restarts, updates, and system reboots.
@@ -115,22 +127,24 @@ start-warrantydog.bat     # Windows
 
 # Option 3: Manual Docker run with persistent volumes
 docker build -t warrantydog .
-docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog warrantydog
+docker run -d -p 3001:3001 -v warrantydog-data:/app/data -v warrantydog-logs:/app/logs --name warrantydog-container warrantydog
 
-# Build the image
+# Option 4: Simple Docker run (no persistent storage)
 docker build -t warrantydog .
-
-# Run the container
-docker run -d -p 3001:3001 --name warrantydog warrantydog
+docker run -d -p 3001:3001 --name warrantydog-simple warrantydog
 
 # Check status
 docker ps
 
-# View logs
-docker logs warrantydog -f
+# View logs (adjust container name as needed)
+docker logs warrantydog-warrantydog-1 -f    # For docker-compose
+docker logs warrantydog-container -f        # For manual run with volumes
+docker logs warrantydog-simple -f           # For simple run
 
 # Stop when done
-docker stop warrantydog && docker rm warrantydog
+docker-compose down                          # For docker-compose
+docker stop warrantydog-container && docker rm warrantydog-container  # For manual run
+docker stop warrantydog-simple && docker rm warrantydog-simple        # For simple run
 ```
 
 ### 🌐 **Access Your Application**
@@ -765,11 +779,16 @@ WarrantyDog uses **Docker volumes** to ensure your warranty data, API responses,
 
 **Check database contents:**
 ```bash
-# View database statistics and sample data
-docker exec warrantydog-container node check-db.js
+# For Docker Compose deployment
+docker-compose exec warrantydog node check-db.js
+docker-compose exec warrantydog node debug-db.js
 
-# Detailed database debugging
+# For manual Docker deployment
+docker exec warrantydog-container node check-db.js
 docker exec warrantydog-container node debug-db.js
+
+# If unsure of container name, list containers first
+docker ps --filter "ancestor=warrantydog"
 ```
 
 **Backup your data:**
@@ -810,13 +829,22 @@ When you reload the same CSV file, WarrantyDog automatically:
 # Check Docker is running
 docker info
 
-# Clean up and restart
-docker stop warrantydog && docker rm warrantydog
-docker build --no-cache -t warrantydog .
-docker run -d -p 3001:3001 --name warrantydog warrantydog
+# Option 1: Using Docker Compose (Recommended)
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
 
 # Check logs
-docker logs warrantydog -f
+docker-compose logs -f
+
+# Option 2: Manual Docker cleanup and restart
+docker stop warrantydog-container 2>/dev/null || true
+docker rm warrantydog-container 2>/dev/null || true
+docker build --no-cache -t warrantydog .
+docker run -d -p 3001:3001 -v warrantydog-data:/app/data --name warrantydog-container warrantydog
+
+# Check logs
+docker logs warrantydog-container -f
 ```
 
 **Port conflicts:**
