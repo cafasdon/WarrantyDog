@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
-  mode: 'development',
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   entry: {
     app: './src/app.ts',
     vendorApis: './src/vendorApis.ts',
@@ -31,7 +31,12 @@ module.exports = {
     rules: [
       {
         test: /\.ts$/,
-        use: 'ts-loader',
+        use: {
+          loader: 'ts-loader',
+          options: {
+            configFile: 'tsconfig.frontend.json'
+          }
+        },
         exclude: /node_modules/
       },
       {
@@ -40,7 +45,8 @@ module.exports = {
         use: {
           loader: 'ts-loader',
           options: {
-            allowTsInNodeModules: true
+            allowTsInNodeModules: true,
+            configFile: 'tsconfig.frontend.json'
           }
         }
       },
