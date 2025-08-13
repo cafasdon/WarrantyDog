@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "outDir": "./dist/frontend",
+    "rootDir": "./",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": false,
+    "declarationMap": false,
+    "isolatedModules": true,
+    "noEmit": false
+  },
+  "include": [
+    "app.ts",
+    "vendorApis.ts", 
+    "sessionService.ts",
+    "standardizationService.ts",
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "server.ts",
+    "database/**/*",
+    "logs",
+    "data",
+    "examples",
+    "*.min.js"
+  ]
+}

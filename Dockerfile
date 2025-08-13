@@ -14,11 +14,17 @@ RUN addgroup -g 1001 warrantydog && \
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev for build)
+RUN npm ci && npm cache clean --force
 
-# Copy application
+# Copy application source
 COPY . .
+
+# Build TypeScript application
+RUN npm run build
+
+# Remove dev dependencies after build
+RUN npm ci --only=production && npm cache clean --force
 
 # Set ownership
 RUN chown -R warrantydog:warrantydog /app
@@ -29,5 +35,5 @@ USER warrantydog
 # Expose port
 EXPOSE 3001
 
-# Start application directly
-CMD ["node", "server.js"]
+# Start application from compiled output
+CMD ["node", "dist/server.js"]

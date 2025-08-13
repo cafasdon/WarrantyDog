@@ -5,13 +5,20 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "server": "node server.js",
-    "dev-server": "nodemon server.js",
-    "dev": "echo 'Note: This application serves static files from the backend. Use npm run server for development.'",
+    "start": "node dist/server.js",
+    "server": "node dist/server.js",
+    "dev-server": "nodemon --exec ts-node --esm server.ts",
+    "dev": "npm run build:frontend && npm run dev-server",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc --project tsconfig.json",
+    "build:frontend": "webpack --config webpack.config.js",
+    "build:watch": "concurrently \"npm run build:backend -- --watch\" \"npm run build:frontend -- --watch\"",
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch",
     "lint": "echo 'Note: ESLint not configured. Run npm run validate to install development tools.'",
     "format": "echo 'Note: Prettier not configured. Run npm run validate to install development tools.'",
-    "validate": "echo 'Note: Development tools not installed. This is a production-focused build.'"
+    "validate": "npm run type-check && npm run build"
   },
   "keywords": [
     "warranty",
@@ -35,7 +42,6 @@
     "url": "https://github.com/cafasdon/WarrantyDog/issues"
   },
   "homepage": "https://github.com/cafasdon/WarrantyDog#readme",
-
   "dependencies": {
     "better-sqlite3": "^12.2.0",
     "cors": "^2.8.5",
@@ -48,5 +54,24 @@
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.2.1",
+    "@types/node-fetch": "^2.6.13",
+    "concurrently": "^9.2.0",
+    "copy-webpack-plugin": "^13.0.1",
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.3",
+    "nodemon": "^3.1.10",
+    "rimraf": "^6.0.1",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2",
+    "webpack": "^5.101.1",
+    "webpack-cli": "^6.0.1"
   }
 }
