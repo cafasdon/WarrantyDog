@@ -125,7 +125,8 @@ app.use((req: Request & { startTime?: number; requestId?: string }, res: Respons
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increased limit for large CSV files
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static('.'));
+// Serve compiled frontend files from dist/frontend
+app.use(express.static('./dist/frontend'));
 
 // Dell API proxy endpoint with OAuth 2.0 support
 app.get('/api/dell/warranty/:serviceTag', async (req: Request, res: Response) => {

@@ -11,7 +11,7 @@
     "dev": "npm run build:frontend && npm run dev-server",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "tsc --project tsconfig.json && npm run copy-assets",
-    "copy-assets": "if not exist dist\\src\\database mkdir dist\\src\\database && copy src\\database\\schema.sql dist\\src\\database\\",
+    "copy-assets": "mkdir -p dist/src/database && cp src/database/schema.sql dist/src/database/",
     "build:frontend": "webpack --config webpack.config.cjs",
     "build:watch": "concurrently \"npm run build:backend -- --watch\" \"npm run build:frontend -- --watch\"",
     "clean": "rimraf dist",
