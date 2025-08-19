@@ -48,6 +48,15 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 
+# Real test data and sensitive CSV files (never commit actual device data)
+test_*_devices.csv
+**/real_*.csv
+**/actual_*.csv
+**/*_real.csv
+**/*_actual.csv
+**/BDR*.csv
+**/System Information Report*.csv
+
 # Log files (may contain sensitive information)
 logs/
 *.log
