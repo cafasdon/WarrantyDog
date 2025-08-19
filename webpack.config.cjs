@@ -58,13 +58,13 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: './index.html',
+      template: './src/frontend/index.html',
       filename: 'index.html',
       inject: false // We'll manually inject scripts to maintain ES modules
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: 'style.css', to: 'style.css' },
+        { from: 'src/frontend/style.css', to: 'style.css' },
         { from: 'lib', to: 'lib' }
       ]
     })

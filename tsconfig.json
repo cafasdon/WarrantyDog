@@ -47,8 +47,8 @@
     "data",
     "examples",
     "*.min.js",
-    "database/*.js",
-    "*.js"
+    "lib/*.js",
+    "webpack.config.cjs"
   ],
   "ts-node": {
     "esm": true,

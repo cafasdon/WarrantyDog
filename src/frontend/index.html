@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WarrantyDog 🐕 - Hardware Warranty Checker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐕</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐕 WarrantyDog</h1>
+            <p class="subtitle">Hardware Warranty Checker</p>
+        </header>
+
+        <main>
+            <div class="upload-section">
+                <input type="file" id="csvFile" accept=".csv" />
+                <label for="csvFile" class="file-label" id="dropZone">
+                    📁 Choose CSV File or Drop Here
+                </label>
+                <div class="file-info" id="fileInfo"></div>
+            </div>
+
+            <div class="api-status" id="apiStatus">
+                <div class="status-item">
+                    <span class="vendor">Dell:</span>
+                    <span class="status" id="dellStatus">❌ Not Configured</span>
+                </div>
+                <div class="status-item">
+                    <span class="vendor">Lenovo:</span>
+                    <span class="status" id="lenovoStatus">❌ Not Configured</span>
+                </div>
+                <div class="status-item">
+                    <span class="vendor">HP:</span>
+                    <span class="status">🔜 Coming Soon</span>
+                </div>
+                <div class="status-item">
+                    <span class="vendor">Microsoft:</span>
+                    <span class="status">🔜 Coming Soon</span>
+                </div>
+                <div class="status-item">
+                    <span class="vendor">ASUS:</span>
+                    <span class="status">🔜 Coming Soon</span>
+                </div>
+                <div class="status-item">
+                    <span class="vendor">Apple:</span>
+                    <span class="status">🔜 Coming Soon</span>
+                </div>
+            </div>
+
+            <div class="status-section" id="statusText">
+                <div id="status">Ready to process CSV</div>
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div id="progressBar" class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="progressText">0 / 0 devices processed</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="processBtn" disabled>🚀 Process Warranties</button>
+                <button id="cancelBtn" style="display: none;">❌ Cancel</button>
+                <button id="retryFailedBtn" style="display: none;">🔄 Retry Failed</button>
+                <button id="clearBtn" disabled>🗑️ Clear</button>
+                <button id="exportBtn" disabled>📥 Export Results</button>
+                <button id="configBtn">⚙️ Configure APIs</button>
+            </div>
+
+            <div class="results-section" id="resultsContainer">
+                <div class="table-container">
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Serial Number</th>
+                                <th>Model</th>
+                                <th>Warranty Start</th>
+                                <th>Warranty End</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ API Configuration</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="config-section">
+                    <h3>Dell API</h3>
+                    <form id="dellApiForm" autocomplete="off">
+                        <input type="password" id="dellApiKey" placeholder="Enter Dell API Key" autocomplete="new-password">
+                        <input type="password" id="dellApiSecret" placeholder="Enter Dell API Secret" autocomplete="new-password">
+                        <button type="button" id="testDellApi">🧪 Test Connection</button>
+                    </form>
+                    <div id="testResult"></div>
+                    <p class="config-help">
+                        Get your API key from <a href="https://developer.dell.com/" target="_blank" rel="noopener">Dell Developer Portal</a>
+                    </p>
+                </div>
+
+                <div class="config-section">
+                    <h3>Lenovo API</h3>
+                    <form id="lenovoApiForm" autocomplete="off">
+                        <input type="password" id="lenovoApiKey" placeholder="Enter Lenovo Client ID" autocomplete="new-password">
+                        <input type="password" id="lenovoClientSecret" placeholder="Enter Lenovo Client Secret" autocomplete="new-password">
+                        <button type="button" id="testLenovoApi">🧪 Test Connection</button>
+                    </form>
+                </div>
+
+                <div class="config-section">
+                    <h3>HP API</h3>
+                    <form id="hpApiForm" autocomplete="off">
+                        <input type="password" id="hpApiKey" placeholder="Coming soon" disabled autocomplete="new-password">
+                        <button type="button" disabled>Save</button>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="saveConfig">💾 Save Configuration</button>
+                <button type="button" id="cancelConfig">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>WarrantyDog v0.1.0 | <a href="https://github.com/yourusername/WarrantyDog" target="_blank" rel="noopener">GitHub</a></p>
+    </footer>
+
+    <script src="lib/papaparse.min.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

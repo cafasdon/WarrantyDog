@@ -23,6 +23,7 @@
 
 import { WarrantyLookupService } from './vendorApis';
 import { standardizationService } from './standardizationService';
+import SessionService, { sessionService } from './sessionService';
 import type {
   DeviceData,
   CsvRow,
@@ -53,6 +54,7 @@ import type {
  */
 class WarrantyChecker {
   public warrantyService: WarrantyLookupService;
+  public sessionService: SessionService;
   public csvData: DeviceData[] = [];
   public processedResults: StandardizedWarrantyData[] = [];
   public isProcessing: boolean = false;
@@ -78,6 +80,7 @@ class WarrantyChecker {
 
   constructor() {
     this.warrantyService = new WarrantyLookupService();
+    this.sessionService = sessionService;
 
     this.initializeElements();
     this.initializeProcessingState();
@@ -115,10 +118,10 @@ class WarrantyChecker {
       exportBtn: 'exportBtn',
       configBtn: 'configBtn',
       configModal: 'configModal',
-      saveConfigBtn: 'saveConfigBtn',
+      saveConfigBtn: 'saveConfig',  // Fixed: actual ID is 'saveConfig'
       dellApiKeyInput: 'dellApiKey',
       dellApiSecretInput: 'dellApiSecret',
-      lenovoClientIdInput: 'lenovoClientId',
+      lenovoClientIdInput: 'lenovoApiKey',  // Fixed: actual ID is 'lenovoApiKey'
       testDellApiBtn: 'testDellApi',
       testLenovoApiBtn: 'testLenovoApi',
       testResultElement: 'testResult',
@@ -184,9 +187,8 @@ class WarrantyChecker {
     if (this.elements.dropZone) {
       this.elements.dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
       this.elements.dropZone.addEventListener('drop', this.handleFileDrop.bind(this));
-      this.elements.dropZone.addEventListener('click', () => {
-        this.elements.fileInput?.click();
-      });
+
+      // Note: No click handler needed - the HTML label handles this automatically
     }
 
     // Processing control events
@@ -281,11 +283,13 @@ class WarrantyChecker {
   /**
    * Initialize session service
    */
-  private initializeSessionService(): void {
-    if (typeof window !== 'undefined' && window.sessionService) {
-      console.log('Session service initialized');
-    } else {
-      console.warn('Session service not available');
+  private async initializeSessionService(): Promise<void> {
+    try {
+      // Test session service connectivity
+      await this.sessionService.getAllSessions();
+      console.log('Session service initialized successfully');
+    } catch (error) {
+      console.warn('Session service initialization failed:', error);
     }
   }
 
@@ -293,11 +297,15 @@ class WarrantyChecker {
    * Handle file selection from input
    */
   private async handleFileSelect(event: Event): Promise<void> {
+    console.log('🔍 File select event triggered');
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
 
     if (file) {
+      console.log('📁 File selected:', file.name, 'Size:', file.size);
       await this.processFile(file);
+    } else {
+      console.log('❌ No file selected');
     }
   }
 
@@ -417,6 +425,13 @@ class WarrantyChecker {
   private extractDevicesFromCsv(rawData: CsvRow[]): DeviceData[] {
     const devices: DeviceData[] = [];
 
+    // Debug: Show available columns from the first row
+    if (rawData.length > 0 && rawData[0]) {
+      const availableColumns = Object.keys(rawData[0]);
+      console.log('📋 Available CSV columns:', availableColumns);
+      console.log('🔍 Looking for columns containing: serial, manufacturer, model, computer, device, name');
+    }
+
     rawData.forEach((row, index) => {
       try {
         const device = this.parseDeviceFromRow(row, index);
@@ -435,23 +450,36 @@ class WarrantyChecker {
    * Parse individual device from CSV row
    */
   private parseDeviceFromRow(row: CsvRow, index: number): DeviceData | null {
-    // Try to find serial number in various column names
-    const serialNumber = this.findValueInRow(row, [
-      'serial', 'serialnumber', 'serial_number', 'servicetag', 'service_tag', 'asset_tag'
-    ]);
-
-    if (!serialNumber) {
-      console.warn(`Row ${index + 1}: No serial number found`);
+    // Skip virtual machines (from original implementation)
+    if (this.isVirtualMachine(row)) {
+      console.log(`Row ${index + 1}: Skipping virtual machine`);
       return null;
     }
 
-    // Try to find vendor
+    // Try to find serial number - prioritize Windows System Info format first
+    const serialNumber = this.findValueInRow(row, [
+      'Device Serial Number',  // Windows System Info format (exact match)
+      'Serial Number',         // Common CSV format
+      'serial', 'serialnumber', 'serial_number', 'servicetag', 'service_tag', 'asset_tag',
+      'system serial number', 'chassis serial number', 'baseboard serial number'
+    ]);
+
+    if (!serialNumber) {
+      // Debug: Show what columns are available for this row
+      const availableColumns = Object.keys(row);
+      console.warn(`Row ${index + 1}: No serial number found. Available columns:`, availableColumns);
+      return null;
+    }
+
+    // Try to find vendor - prioritize Windows System Info format first
     const vendor = this.findValueInRow(row, [
-      'vendor', 'manufacturer', 'make', 'brand'
+      'Base Board Manufacturer',  // Windows System Info format (exact match)
+      'Vendor',                   // Common CSV format
+      'vendor', 'manufacturer', 'make', 'brand', 'system manufacturer', 'computer manufacturer'
     ]);
 
     if (!vendor) {
-      console.warn(`Row ${index + 1}: No vendor found for ${serialNumber}`);
+      console.warn(`Row ${index + 1}: No vendor found for ${serialNumber}. Available columns:`, Object.keys(row));
       return null;
     }
 
@@ -462,14 +490,42 @@ class WarrantyChecker {
     return {
       serialNumber: serialNumber.trim().toUpperCase(),
       vendor: normalizedVendor,
-      model: this.findValueInRow(row, ['model', 'product', 'product_name']) || undefined,
-      deviceName: this.findValueInRow(row, ['name', 'device_name', 'hostname', 'computer_name']) || undefined,
-      location: this.findValueInRow(row, ['location', 'site', 'building', 'department']) || undefined,
+      model: this.findValueInRow(row, [
+        'System Model',  // Windows System Info format (exact match)
+        'Model',         // Common CSV format
+        'model', 'product', 'product_name', 'system model', 'computer model', 'system sku'
+      ]) || undefined,
+      deviceName: this.findValueInRow(row, [
+        'Name',  // Windows System Info format (exact match)
+        'Friendly Name',  // Windows System Info format (exact match)
+        'Device Name',   // Common CSV format
+        'name', 'device_name', 'hostname', 'computer_name', 'computer name', 'system name'
+      ]) || undefined,
+      location: this.findValueInRow(row, [
+        'Site Name',  // Windows System Info format (exact match)
+        'Site Friendly Name',  // Windows System Info format (exact match)
+        'Location',      // Common CSV format
+        'location', 'site', 'building', 'department'
+      ]) || undefined,
       originalData: row,
       isSupported,
       apiConfigured,
       processingState: 'pending'
     };
+  }
+
+  /**
+   * Check if device is a virtual machine (from original implementation)
+   */
+  private isVirtualMachine(row: CsvRow): boolean {
+    const model = (row['System Model'] || row['model'] || '').toLowerCase();
+    const manufacturer = (row['Base Board Manufacturer'] || row['vendor'] || '').toLowerCase();
+    const serialNumber = row['Device Serial Number'] || row['serial'] || '';
+
+    return model.includes('vmware') ||
+           model.includes('virtual') ||
+           manufacturer.includes('vmware') ||
+           serialNumber.startsWith('VMware-');
   }
 
   /**

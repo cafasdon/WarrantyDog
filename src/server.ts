@@ -24,6 +24,9 @@ import helmet from 'helmet';
 import DatabaseService from './database/DatabaseService.js';
 import logger from './logger.js';
 import metrics from './metrics.js';
+import { AdaptiveRateLimiter } from './adaptiveRateLimiter.js';
+import { BurstManager } from './burstManager.js';
+import { IntelligentDelayCalculator } from './intelligentDelayCalculator.js';
 import type {
   WarrantyApiRequest,
   ApiErrorResponse,
@@ -36,6 +39,16 @@ import type {
   RequestWithMetrics
 } from './types/api.js';
 
+// Extend Express Request interface to include custom properties
+declare global {
+  namespace Express {
+    interface Request {
+      startTime?: number;
+      requestId?: string;
+    }
+  }
+}
+
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +59,37 @@ const PORT = process.env['PORT'] || 3001;
 // Initialize database service
 const dbService = new DatabaseService();
 let dbInitialized = false;
+
+// Initialize intelligent rate limiting system
+const dellRateLimiter = new AdaptiveRateLimiter('dell', {
+  requestsPerMinute: 30,
+  requestsPerHour: 1000,
+  minDelayMs: 1000,
+  maxDelayMs: 30000,
+  baseDelayMs: 2000
+});
+
+const lenovoRateLimiter = new AdaptiveRateLimiter('lenovo', {
+  requestsPerMinute: 30,
+  requestsPerHour: 1000,
+  minDelayMs: 1000,
+  maxDelayMs: 30000,
+  baseDelayMs: 2000
+});
+
+const dellBurstManager = new BurstManager('dell', {
+  maxBurstSize: 5,
+  burstWindowMs: 30000,
+  cooldownMs: 60000
+});
+
+const lenovoBurstManager = new BurstManager('lenovo', {
+  maxBurstSize: 5,
+  burstWindowMs: 30000,
+  cooldownMs: 60000
+});
+
+const delayCalculator = new IntelligentDelayCalculator('dell');
 
 // Security middleware
 app.use(helmet({
@@ -128,12 +172,24 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Serve compiled frontend files from dist/frontend
 app.use(express.static('./dist/frontend'));
 
-// Dell API proxy endpoint with OAuth 2.0 support
+// Dell API proxy endpoint with OAuth 2.0 support and intelligent rate limiting
 app.get('/api/dell/warranty/:serviceTag', async (req: Request, res: Response) => {
   try {
     const { serviceTag } = req.params;
     const apiKey = req.headers['x-dell-api-key'] as string;
     const apiSecret = req.headers['x-dell-api-secret'] as string;
+
+    // Check rate limiting before making API call
+    if (!dellRateLimiter.canMakeRequest()) {
+      const delay = dellRateLimiter.getOptimalDelay();
+      logger.warn(`Dell API rate limit hit for ${serviceTag}, suggested delay: ${delay}ms`);
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: 'Dell API rate limit exceeded. Please try again later.',
+        retryAfter: Math.ceil(delay / 1000),
+        vendor: 'dell'
+      } as ApiErrorResponse);
+    }
 
     if (!apiKey || !apiSecret) {
       return res.status(400).json({
@@ -191,19 +247,52 @@ app.get('/api/dell/warranty/:serviceTag', async (req: Request, res: Response) =>
     const warrantyData = await warrantyResponse.json();
     console.log(`📊 Dell warranty API response:`, warrantyData);
 
+    // Record successful request for rate limiting
+    const responseTime = Date.now() - (req.startTime || Date.now());
+    dellRateLimiter.recordRequest({
+      responseTime,
+      success: warrantyResponse.ok,
+      statusCode: warrantyResponse.status,
+      rateLimited: warrantyResponse.status === 429
+    });
+
+    // Check for rate limit headers and learn from them
+    const rateLimitHeaders = {
+      'x-ratelimit-limit': warrantyResponse.headers.get('x-ratelimit-limit') || undefined,
+      'x-ratelimit-remaining': warrantyResponse.headers.get('x-ratelimit-remaining') || undefined,
+      'x-ratelimit-reset': warrantyResponse.headers.get('x-ratelimit-reset') || undefined,
+      'retry-after': warrantyResponse.headers.get('retry-after') || undefined
+    };
+    dellRateLimiter.learnFromHeaders(rateLimitHeaders);
+
     // Return the warranty data with proper status
     return res.status(warrantyResponse.status).json(warrantyData);
 
   } catch (error) {
     console.error('Dell API proxy error:', error);
+
+    // Record failure for rate limiting
+    dellRateLimiter.recordFailure(error as Error);
+
+    // Check if this is a rate limit error
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+      dellRateLimiter.recordRateLimitHit();
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: 'Dell API rate limit exceeded',
+        vendor: 'dell'
+      } as ApiErrorResponse);
+    }
+
     return res.status(500).json({
       error: 'Internal server error',
-      message: (error as Error).message
+      message: errorMessage
     } as ApiErrorResponse);
   }
 });
 
-// Lenovo API proxy endpoint
+// Lenovo API proxy endpoint with intelligent rate limiting
 app.post('/api/lenovo/warranty', async (req: Request, res: Response) => {
   try {
     const { Serial } = req.body;
@@ -211,6 +300,18 @@ app.post('/api/lenovo/warranty', async (req: Request, res: Response) => {
 
     console.log(`🔍 Lenovo API proxy request for serial: ${Serial}`);
     console.log(`🔑 Using ClientID: ${clientId ? clientId.substring(0, 10) + '...' : 'not provided'}`);
+
+    // Check rate limiting before making API call
+    if (!lenovoRateLimiter.canMakeRequest()) {
+      const delay = lenovoRateLimiter.getOptimalDelay();
+      logger.warn(`Lenovo API rate limit hit for ${Serial}, suggested delay: ${delay}ms`);
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: 'Lenovo API rate limit exceeded. Please try again later.',
+        retryAfter: Math.ceil(delay / 1000),
+        vendor: 'lenovo'
+      } as ApiErrorResponse);
+    }
 
     if (!clientId) {
       return res.status(401).json({
@@ -254,14 +355,47 @@ app.post('/api/lenovo/warranty', async (req: Request, res: Response) => {
 
     console.log(`📊 Lenovo API response data:`, responseData);
 
+    // Record successful request for rate limiting
+    const responseTime = Date.now() - (req.startTime || Date.now());
+    lenovoRateLimiter.recordRequest({
+      responseTime,
+      success: response.ok,
+      statusCode: response.status,
+      rateLimited: response.status === 429
+    });
+
+    // Check for rate limit headers and learn from them
+    const rateLimitHeaders = {
+      'x-ratelimit-limit': response.headers.get('x-ratelimit-limit') || undefined,
+      'x-ratelimit-remaining': response.headers.get('x-ratelimit-remaining') || undefined,
+      'x-ratelimit-reset': response.headers.get('x-ratelimit-reset') || undefined,
+      'retry-after': response.headers.get('retry-after') || undefined
+    };
+    lenovoRateLimiter.learnFromHeaders(rateLimitHeaders);
+
     // Return the response with proper status
     return res.status(response.status).json(responseData);
 
   } catch (error) {
     console.error('Lenovo API proxy error:', error);
+
+    // Record failure for rate limiting
+    lenovoRateLimiter.recordFailure(error as Error);
+
+    // Check if this is a rate limit error
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+      lenovoRateLimiter.recordRateLimitHit();
+      return res.status(429).json({
+        error: 'rate_limit_exceeded',
+        message: 'Lenovo API rate limit exceeded',
+        vendor: 'lenovo'
+      } as ApiErrorResponse);
+    }
+
     return res.status(500).json({
       error: 'Internal server error',
-      message: (error as Error).message
+      message: errorMessage
     } as ApiErrorResponse);
   }
 });
@@ -656,6 +790,62 @@ async function startServer(): Promise<void> {
     process.exit(1);
   }
 }
+
+// Rate limiting status endpoint
+app.get('/api/rate-limiting/status', (req: Request, res: Response) => {
+  try {
+    const dellStatus = dellRateLimiter.getStatus();
+    const lenovoStatus = lenovoRateLimiter.getStatus();
+    const dellBurstMetrics = dellBurstManager.getMetrics();
+    const lenovoBurstMetrics = lenovoBurstManager.getMetrics();
+
+    res.json({
+      dell: {
+        rateLimiter: dellStatus,
+        burstManager: dellBurstMetrics
+      },
+      lenovo: {
+        rateLimiter: lenovoStatus,
+        burstManager: lenovoBurstMetrics
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Rate limiting status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: (error as Error).message
+    } as ApiErrorResponse);
+  }
+});
+
+// Reset rate limiting circuit breakers endpoint
+app.post('/api/rate-limiting/reset', (req: Request, res: Response) => {
+  try {
+    const { vendor } = req.body;
+
+    if (vendor === 'dell' || !vendor) {
+      dellRateLimiter.resetCircuitBreaker();
+      dellBurstManager.resetBurst();
+    }
+
+    if (vendor === 'lenovo' || !vendor) {
+      lenovoRateLimiter.resetCircuitBreaker();
+      lenovoBurstManager.resetBurst();
+    }
+
+    res.json({
+      message: `Rate limiting reset for ${vendor || 'all vendors'}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Rate limiting reset error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: (error as Error).message
+    } as ApiErrorResponse);
+  }
+});
 
 // Graceful shutdown
 process.on('SIGINT', () => {

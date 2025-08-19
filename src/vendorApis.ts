@@ -424,22 +424,35 @@ class DellAPI extends BaseAPI {
    */
   private parseDellResponse(data: any, serviceTag: string): WarrantyApiResponse {
     try {
-      // Handle Dell API response format
-      if (data.entitlements && Array.isArray(data.entitlements) && data.entitlements.length > 0) {
-        const entitlement = data.entitlements[0];
+      // Handle Dell API response format - data is an array of devices
+      let deviceData = data;
+
+      // If data is an array, get the first device
+      if (Array.isArray(data) && data.length > 0) {
+        deviceData = data[0];
+      }
+
+      // Check if device has entitlements
+      if (deviceData.entitlements && Array.isArray(deviceData.entitlements) && deviceData.entitlements.length > 0) {
+        // Find the most relevant entitlement (prefer EXTENDED, then INITIAL)
+        const entitlements = deviceData.entitlements;
+        const extendedEntitlement = entitlements.find((e: any) => e.entitlementType === 'EXTENDED');
+        const entitlement = extendedEntitlement || entitlements[0];
 
         return {
           success: true,
           vendor: 'dell',
           serialNumber: serviceTag,
-          model: entitlement.productLineDescription || '',
+          model: deviceData.productLineDescription || entitlement.productLineDescription || '',
           warrantyStatus: this.determineDellWarrantyStatus(entitlement),
           warrantyStartDate: entitlement.startDate,
           warrantyEndDate: entitlement.endDate,
           warrantyDetails: {
             serviceLevel: entitlement.serviceLevelDescription,
             description: entitlement.entitlementType,
-            provider: 'Dell'
+            provider: 'Dell',
+            shipDate: deviceData.shipDate,
+            countryCode: deviceData.countryCode
           }
         };
       } else {
