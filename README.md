@@ -109,6 +109,106 @@ docker-compose up -d
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
 - **Git** installed ([Download here](https://git-scm.com/downloads))
 
+## 🔧 **Development Setup & Current Status**
+
+### **Latest Commit Status (dfce24a - 2025-08-19)**
+✅ **File Upload**: Fixed double file chooser issue - now opens only once
+✅ **CSV Parsing**: Enhanced column detection for standard formats ("Serial Number", "Vendor", etc.)
+✅ **Dell API**: Fixed response parsing for warranty data display
+✅ **TypeScript**: Full migration completed with strict type checking
+✅ **Build System**: Webpack + TypeScript compilation working
+✅ **Rate Limiting**: Intelligent adaptive rate limiting with burst management
+✅ **Session Management**: SQLite-based persistence across restarts
+
+### **Architecture Overview**
+- **Frontend**: TypeScript + Webpack → compiled to `dist/`
+- **Backend**: Express.js + TypeScript → compiled to `dist/src/`
+- **Database**: SQLite with Docker volume persistence
+- **APIs**: Dell (OAuth 2.0) + Lenovo (Client ID) with rate limiting
+- **Build**: Two-stage compilation (backend → frontend → cleanup)
+
+### **Key Development Files**
+```
+src/
+├── app.ts                    # Main frontend application (50.9KB)
+├── server.ts                 # Express backend server
+├── vendorApis.ts            # Dell/Lenovo API integrations
+├── sessionService.ts        # Session & database management
+├── standardizationService.ts # Data normalization
+├── database/
+│   ├── DatabaseService.ts   # SQLite operations
+│   └── schema.sql           # Database schema
+├── types/
+│   ├── frontend.ts          # TypeScript definitions
+│   ├── api.ts              # API type definitions
+│   └── database.ts         # Database type definitions
+└── frontend/
+    ├── index.html          # Main HTML template
+    └── style.css           # Application styles
+```
+
+### **Development Commands**
+```bash
+# Full build (backend + frontend + cleanup)
+npm run build
+
+# Start production server
+npm start
+
+# Development with auto-rebuild
+npm run dev
+
+# Type checking only
+npm run type-check
+
+# Clean build artifacts
+npm run clean
+```
+
+### **Known Working State & Troubleshooting**
+
+#### **✅ Verified Working (Commit dfce24a)**
+- File upload works with single click (no double chooser)
+- CSV parsing recognizes standard column headers
+- Dell API integration returns real warranty data
+- All 5 test devices process successfully
+- TypeScript compilation completes without errors
+- Docker container starts and serves on port 3001
+
+#### **🔧 Common Development Issues & Solutions**
+
+**File Upload Issues:**
+- ❌ **Double file chooser**: Fixed in dfce24a - removed duplicate click handler
+- ❌ **CSV not parsing**: Ensure columns named "Serial Number", "Vendor", "Model"
+- ✅ **Test file**: Use `test_bdr_devices.csv` for verification
+
+**Build Issues:**
+- ❌ **TypeScript errors**: Run `npm run type-check` first
+- ❌ **Webpack fails**: Check `tsconfig.frontend.json` configuration
+- ✅ **Clean build**: `npm run clean && npm run build`
+
+**API Issues:**
+- ❌ **Dell API fails**: Verify credentials in localStorage (F12 → Application → Local Storage)
+- ❌ **Rate limiting**: Check server logs for rate limit messages
+- ✅ **Test API**: Use Configure APIs → Test Connection
+
+**Database Issues:**
+- ❌ **SQLite errors**: Check `./data/warrantydog.db` permissions
+- ❌ **Session not persisting**: Verify Docker volume mounting
+- ✅ **Debug database**: Use `npm run debug-db`
+
+#### **🚀 Quick Verification Steps**
+1. **Build**: `npm run build` (should complete without errors)
+2. **Start**: `npm start` (server starts on port 3001)
+3. **Upload**: Test with `test_bdr_devices.csv` (should load 5 devices)
+4. **API**: Configure Dell/Lenovo credentials and test connection
+5. **Process**: Click "Process 5 Devices" (should show warranty data)
+
+#### **📁 Test Files Available**
+- `test_bdr_devices.csv` - 5 Dell devices with standard column headers
+- `test-devices.csv` - Alternative test format
+- `examples/sample-devices.csv` - Documentation example
+
 ### ⚡ **One-Liner Installation**
 
 **Linux/macOS/WSL:**
