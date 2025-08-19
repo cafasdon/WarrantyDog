@@ -109,6 +109,24 @@ docker-compose up -d
 - **Docker Desktop** installed and running ([Download here](https://www.docker.com/products/docker-desktop/))
 - **Git** installed ([Download here](https://git-scm.com/downloads))
 
+## 🔒 **SECURITY WARNING**
+
+**⚠️ THIS IS A PUBLIC REPOSITORY ⚠️**
+
+**NEVER COMMIT:**
+- ❌ Real device serial numbers or service tags
+- ❌ Actual employee names or location data
+- ❌ API credentials (Dell API keys, Lenovo client IDs)
+- ❌ Database files with real warranty data
+- ❌ Any production or sensitive information
+
+**✅ ONLY COMMIT:**
+- ✅ Dummy/demo data (like `test_devices_sample.csv`)
+- ✅ Code and documentation
+- ✅ Sanitized examples and templates
+
+**📖 Read [SECURITY.md](SECURITY.md) for complete security guidelines.**
+
 ## 🔧 **Development Setup & Current Status**
 
 ### **Latest Commit Status (dfce24a - 2025-08-19)**

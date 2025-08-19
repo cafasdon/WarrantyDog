@@ -101,13 +101,46 @@ foreach ($file in $buildFiles) {
 Write-Host ""
 Write-Host "🧪 Checking test files..." -ForegroundColor Yellow
 
-if (Test-Path "test_bdr_devices.csv") {
-    $csvContent = Get-Content "test_bdr_devices.csv" -First 2
-    Write-Host "  ✅ test_bdr_devices.csv exists" -ForegroundColor Green
+if (Test-Path "test_devices_sample.csv") {
+    $csvContent = Get-Content "test_devices_sample.csv" -First 2
+    Write-Host "  ✅ test_devices_sample.csv exists" -ForegroundColor Green
     Write-Host "    Header: $($csvContent[0])" -ForegroundColor Gray
     Write-Host "    Sample: $($csvContent[1])" -ForegroundColor Gray
 } else {
-    Write-Host "  ❌ test_bdr_devices.csv missing" -ForegroundColor Red
+    Write-Host "  ❌ test_devices_sample.csv missing" -ForegroundColor Red
+}
+
+Write-Host ""
+Write-Host "🔒 Security audit..." -ForegroundColor Yellow
+
+# Check for sensitive files that should not exist
+$sensitiveFiles = @(
+    "test_bdr_devices.csv",
+    "data/warrantydog.db",
+    "examples/System Information Report - BDR.csv",
+    ".env"
+)
+
+$foundSensitive = $false
+foreach ($file in $sensitiveFiles) {
+    if (Test-Path $file) {
+        Write-Host "  ❌ SECURITY RISK: $file found (should not exist)" -ForegroundColor Red
+        $foundSensitive = $true
+    }
+}
+
+if (!$foundSensitive) {
+    Write-Host "  ✅ No sensitive files detected" -ForegroundColor Green
+}
+
+# Check .gitignore is protecting sensitive patterns
+if (Test-Path ".gitignore") {
+    $gitignoreContent = Get-Content ".gitignore" -Raw
+    if ($gitignoreContent -match "\*\.db" -and $gitignoreContent -match "test_.*devices\.csv") {
+        Write-Host "  ✅ .gitignore protects sensitive files" -ForegroundColor Green
+    } else {
+        Write-Host "  ❌ .gitignore missing sensitive file protection" -ForegroundColor Red
+    }
 }
 
 Write-Host ""
@@ -152,6 +185,6 @@ Write-Host "   npm start" -ForegroundColor White
 Write-Host ""
 Write-Host "🌐 Then open: http://localhost:3001" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "📋 Test with: test_bdr_devices.csv" -ForegroundColor Yellow
+Write-Host "📋 Test with: test_devices_sample.csv" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "📚 Documentation: README.md & DEVELOPMENT_NOTES.md" -ForegroundColor Yellow
